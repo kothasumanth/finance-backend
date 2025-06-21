@@ -2,8 +2,10 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const User = require('./user');
+const cors = require('cors');
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
 // MongoDB connection
@@ -31,6 +33,16 @@ app.get('/users-table', async (req, res) => {
     res.send(html);
   } catch (err) {
     res.status(500).send('Error fetching users: ' + err.message);
+  }
+});
+
+// Route to return users as JSON for frontend
+app.get('/users-table-json', async (req, res) => {
+  try {
+    const users = await User.find();
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: 'Error fetching users: ' + err.message });
   }
 });
 
