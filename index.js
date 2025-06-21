@@ -74,10 +74,18 @@ app.post('/mutual-funds', async (req, res) => {
 // Update mutual fund entry (allow changing fundName reference)
 app.put('/mutual-funds/:id', async (req, res) => {
   try {
-    const { fundName, purchaseDate, investType, amount, nav, units } = req.body;
+    // Accept null values for nav and units
+    const updateFields = {};
+    if ('fundName' in req.body) updateFields.fundName = req.body.fundName;
+    if ('purchaseDate' in req.body) updateFields.purchaseDate = req.body.purchaseDate;
+    if ('investType' in req.body) updateFields.investType = req.body.investType;
+    if ('amount' in req.body) updateFields.amount = req.body.amount;
+    if ('NAV' in req.body || 'nav' in req.body) updateFields.nav = req.body.NAV ?? req.body.nav;
+    if ('Units' in req.body || 'units' in req.body) updateFields.units = req.body.Units ?? req.body.units;
+
     const updated = await MutualFundEntry.findByIdAndUpdate(
       req.params.id,
-      { fundName, purchaseDate, investType, amount, nav, units },
+      { $set: updateFields },
       { new: true }
     ).populate('fundName');
     if (!updated) return res.status(404).json({ error: 'Entry not found' });
