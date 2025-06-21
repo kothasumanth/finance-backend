@@ -74,10 +74,10 @@ app.post('/mutual-funds', async (req, res) => {
 // Update mutual fund entry (allow changing fundName reference)
 app.put('/mutual-funds/:id', async (req, res) => {
   try {
-    const { fundName, purchaseDate, investType, amount, nav } = req.body;
+    const { fundName, purchaseDate, investType, amount, nav, units } = req.body;
     const updated = await MutualFundEntry.findByIdAndUpdate(
       req.params.id,
-      { fundName, purchaseDate, investType, amount, nav },
+      { fundName, purchaseDate, investType, amount, nav, units },
       { new: true }
     ).populate('fundName');
     if (!updated) return res.status(404).json({ error: 'Entry not found' });
@@ -173,6 +173,25 @@ app.get('/mf-api', async (req, res) => {
     }
   } catch (err) {
     return res.json({ date: '', nav: '' });
+  }
+});
+
+// Endpoint to backfill units for all entries with nav but missing units
+app.post('/mutual-funds/backfill-units', async (req, res) => {
+  try {
+    const entries = await MutualFundEntry.find({ nav: { $exists: true, $ne: null }, $or: [{ units: { $exists: false } }, { units: null }] });
+    let updatedCount = 0;
+    for (const entry of entries) {
+      if (entry.amount && entry.nav) {
+        const units = parseFloat((parseFloat(entry.amount) / parseFloat(entry.nav)).toFixed(4));
+        entry.units = units;
+        await entry.save();
+        updatedCount++;
+      }
+    }
+    res.json({ success: true, updated: updatedCount });
+  } catch (err) {
+    res.status(500).json({ error: 'Error backfilling units: ' + err.message });
   }
 });
 
