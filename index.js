@@ -1,7 +1,9 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const User = require('./user');
+const User = require('./models/user');
+const MutualFundEntry = require('./models/mutualFundEntry');
+const MutualFundMetadata = require('./models/mutualFundMetadata');
 const cors = require('cors');
 
 const app = express();
@@ -43,6 +45,102 @@ app.get('/users-table-json', async (req, res) => {
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: 'Error fetching users: ' + err.message });
+  }
+});
+
+// Get mutual fund entries for a user (populate fundName)
+app.get('/mutual-funds/:userId', async (req, res) => {
+  try {
+    const entries = await MutualFundEntry.find({ userId: req.params.userId }).populate('fundName');
+    res.json(entries);
+  } catch (err) {
+    res.status(500).json({ error: 'Error fetching mutual fund entries: ' + err.message });
+  }
+});
+
+// Add a new mutual fund entry for a user
+app.post('/mutual-funds', async (req, res) => {
+  try {
+    const { userId, fundName, date } = req.body;
+    const newEntry = new MutualFundEntry({ userId, fundName, date });
+    await newEntry.save();
+    const populatedEntry = await MutualFundEntry.findById(newEntry._id).populate('fundName');
+    res.status(201).json(populatedEntry);
+  } catch (err) {
+    res.status(500).json({ error: 'Error adding mutual fund entry: ' + err.message });
+  }
+});
+
+// Update mutual fund entry (allow changing fundName reference)
+app.put('/mutual-funds/:id', async (req, res) => {
+  try {
+    const { fundName, date } = req.body;
+    const updated = await MutualFundEntry.findByIdAndUpdate(
+      req.params.id,
+      { fundName, date },
+      { new: true }
+    ).populate('fundName');
+    if (!updated) return res.status(404).json({ error: 'Entry not found' });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'Error updating entry: ' + err.message });
+  }
+});
+
+// Delete mutual fund entry
+app.delete('/mutual-funds/:id', async (req, res) => {
+  try {
+    const deleted = await MutualFundEntry.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'Entry not found' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error deleting entry: ' + err.message });
+  }
+});
+
+// Mutual Fund Metadata endpoints
+app.get('/mutualfund-metadata', async (req, res) => {
+  try {
+    const data = await MutualFundMetadata.find();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Error fetching metadata: ' + err.message });
+  }
+});
+
+app.post('/mutualfund-metadata', async (req, res) => {
+  try {
+    const { MutualFundName, GoogleValue } = req.body;
+    const newMeta = new MutualFundMetadata({ MutualFundName, GoogleValue });
+    await newMeta.save();
+    res.status(201).json(newMeta);
+  } catch (err) {
+    res.status(500).json({ error: 'Error adding metadata: ' + err.message });
+  }
+});
+
+app.put('/mutualfund-metadata/:id', async (req, res) => {
+  try {
+    const { MutualFundName, GoogleValue } = req.body;
+    const updated = await MutualFundMetadata.findByIdAndUpdate(
+      req.params.id,
+      { MutualFundName, GoogleValue },
+      { new: true }
+    );
+    if (!updated) return res.status(404).json({ error: 'Metadata not found' });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'Error updating metadata: ' + err.message });
+  }
+});
+
+app.delete('/mutualfund-metadata/:id', async (req, res) => {
+  try {
+    const deleted = await MutualFundMetadata.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'Metadata not found' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error deleting metadata: ' + err.message });
   }
 });
 
