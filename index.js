@@ -144,6 +144,38 @@ app.delete('/mutualfund-metadata/:id', async (req, res) => {
   }
 });
 
+// NAV API endpoint for mutual fund (returns { date, nav } or blanks)
+app.get('/mf-api', async (req, res) => {
+  const googleValue = req.query.googleValue;
+  if (!googleValue) {
+    return res.status(400).json({ error: 'Missing googleValue parameter' });
+  }
+  const mfApiUrl = `https://api.mfapi.in/mf/${googleValue}/latest`;
+  try {
+    const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+    const response = await fetch(mfApiUrl);
+    const rawText = await response.text();
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch (e) {
+      data = {};
+    }
+    if (data && data.data && data.data.length > 0) {
+      return res.json({
+        date: data.data[0].date || '',
+        nav: data.data[0].nav || '',
+        mfApiUrl,
+        mfApiRawResponse: rawText
+      });
+    } else {
+      return res.json({ date: '', nav: '', mfApiUrl, mfApiRawResponse: rawText });
+    }
+  } catch (err) {
+    return res.json({ date: '', nav: '' });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
