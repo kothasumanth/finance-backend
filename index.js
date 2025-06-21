@@ -61,8 +61,8 @@ app.get('/mutual-funds/:userId', async (req, res) => {
 // Add a new mutual fund entry for a user
 app.post('/mutual-funds', async (req, res) => {
   try {
-    const { userId, fundName, date } = req.body;
-    const newEntry = new MutualFundEntry({ userId, fundName, date });
+    const { userId, fundName, purchaseDate, investType, amount } = req.body;
+    const newEntry = new MutualFundEntry({ userId, fundName, purchaseDate, investType, amount });
     await newEntry.save();
     const populatedEntry = await MutualFundEntry.findById(newEntry._id).populate('fundName');
     res.status(201).json(populatedEntry);
@@ -74,10 +74,10 @@ app.post('/mutual-funds', async (req, res) => {
 // Update mutual fund entry (allow changing fundName reference)
 app.put('/mutual-funds/:id', async (req, res) => {
   try {
-    const { fundName, date } = req.body;
+    const { fundName, purchaseDate, investType, amount } = req.body;
     const updated = await MutualFundEntry.findByIdAndUpdate(
       req.params.id,
-      { fundName, date },
+      { fundName, purchaseDate, investType, amount },
       { new: true }
     ).populate('fundName');
     if (!updated) return res.status(404).json({ error: 'Entry not found' });
