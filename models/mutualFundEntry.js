@@ -7,7 +7,9 @@ const mutualFundEntrySchema = new mongoose.Schema({
   investType: { type: String, enum: ['Invest', 'Redeem'], required: true },
   amount: { type: Number, required: true },
   nav: { type: Number },
-  units: { type: Number }
+  units: { type: Number },
+  isRedeemed: { type: Boolean, default: false },
+  balanceUnit: { type: Number, default: 0 }
 });
 
 module.exports = mongoose.model('MutualFundEntry', mutualFundEntrySchema);
