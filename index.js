@@ -205,18 +205,15 @@ app.post('/mutual-funds/backfill-units', async (req, res) => {
   }
 });
 
-// ReCal endpoint: match Redeem to Invest entries and update isRedeemed and balanceUnit
+// ReCal endpoint: match Redeem to Invest entries and update isRedeemed, balanceUnit, principalRedeem, interestRedeem
 app.post('/mutual-funds/recal', async (req, res) => {
   try {
     const { userId, fundId } = req.body;
     // Get all entries for this user and fund, sorted by purchaseDate
     const entries = await MutualFundEntry.find({ userId, fundName: fundId }).sort({ purchaseDate: 1 });
-    // Separate Invest and Redeem
-    let invests = entries.filter(e => e.investType === 'Invest');
-    let redeems = entries.filter(e => e.investType === 'Redeem');
-    // Only consider those not fully redeemed
-    invests = invests.filter(e => !e.isRedeemed && (e.balanceUnit === undefined || e.balanceUnit > 0));
-    redeems = redeems.filter(e => !e.isRedeemed && (e.balanceUnit === undefined || e.balanceUnit > 0));
+    // Only consider Invest and Redeem entries that are not fully redeemed
+    let invests = entries.filter(e => e.investType === 'Invest' && !e.isRedeemed && (e.balanceUnit === undefined || e.balanceUnit > 0));
+    let redeems = entries.filter(e => e.investType === 'Redeem' && !e.isRedeemed && (e.balanceUnit === undefined || e.balanceUnit > 0));
     // Set up balanceUnit for all invests if not set
     for (const invest of invests) {
       if (typeof invest.balanceUnit !== 'number' || isNaN(invest.balanceUnit)) {
@@ -224,37 +221,31 @@ app.post('/mutual-funds/recal', async (req, res) => {
         await invest.save();
       }
     }
-    // Set up balanceUnit for all redeems if not set
-    for (const redeem of redeems) {
-      if (typeof redeem.balanceUnit !== 'number' || isNaN(redeem.balanceUnit)) {
-        redeem.balanceUnit = redeem.units || 0;
-        await redeem.save();
-      }
-    }
     // Main matching logic
+    for (const invest of invests) {
+      let investUnitsLeft = invest.balanceUnit || 0;
+      let principalRedeem = invest.principalRedeem || 0;
+      let interestRedeem = invest.interestRedeem || 0;
+      for (const redeem of redeems) {
+        if (investUnitsLeft <= 0) break;
+        if (redeem.balanceUnit <= 0) continue;
+        // How many units can we match?
+        const matchUnits = Math.min(investUnitsLeft, redeem.balanceUnit);
+        // principalRedeem += matchUnits * invest.nav
+        // interestRedeem += matchUnits * (redeem.nav - invest.nav)
+        const investNav = invest.nav || 0;
+        const redeemNav = redeem.nav || 0;
+        principalRedeem += matchUnits * investNav;
+        interestRedeem += matchUnits * (redeemNav - investNav);
+        investUnitsLeft -= matchUnits;
+        redeem.balanceUnit -= matchUnits;
+      }
+      // Update only if changed
+      await MutualFundEntry.findByIdAndUpdate(invest._id, { $set: { principalRedeem, interestRedeem, balanceUnit: investUnitsLeft, isRedeemed: investUnitsLeft <= 0 } });
+    }
+    // After matching, update isRedeemed and balanceUnit for all redeems
     for (const redeem of redeems) {
-      let newRedeemBalanceUnit = redeem.balanceUnit;
-      for (const invest of invests) {
-        if (invest.isRedeemed || invest.balanceUnit <= 0) continue;
-        if (invest.balanceUnit > newRedeemBalanceUnit) {
-          invest.balanceUnit = invest.balanceUnit - newRedeemBalanceUnit;
-          await MutualFundEntry.findByIdAndUpdate(invest._id, { $set: { balanceUnit: invest.balanceUnit } });
-          await MutualFundEntry.findByIdAndUpdate(redeem._id, { $set: { isRedeemed: true, balanceUnit: 0 } });
-          newRedeemBalanceUnit = 0;
-          break;
-        } else if (invest.balanceUnit < newRedeemBalanceUnit) {
-          newRedeemBalanceUnit = newRedeemBalanceUnit - invest.balanceUnit;
-          await MutualFundEntry.findByIdAndUpdate(invest._id, { $set: { balanceUnit: 0, isRedeemed: true } });
-        } else if (invest.balanceUnit === newRedeemBalanceUnit) {
-          await MutualFundEntry.findByIdAndUpdate(invest._id, { $set: { balanceUnit: 0, isRedeemed: true } });
-          await MutualFundEntry.findByIdAndUpdate(redeem._id, { $set: { isRedeemed: true, balanceUnit: 0 } });
-          newRedeemBalanceUnit = 0;
-          break;
-        }
-      }
-      if (newRedeemBalanceUnit > 0) {
-        await MutualFundEntry.findByIdAndUpdate(redeem._id, { $set: { balanceUnit: newRedeemBalanceUnit } });
-      }
+      await MutualFundEntry.findByIdAndUpdate(redeem._id, { $set: { balanceUnit: redeem.balanceUnit, isRedeemed: redeem.balanceUnit <= 0 } });
     }
     res.json({ success: true });
   } catch (err) {
@@ -268,7 +259,7 @@ app.post('/mutual-funds/force-null', async (req, res) => {
     const { userId, fundId } = req.body;
     await MutualFundEntry.updateMany(
       { userId, fundName: fundId },
-      { $set: { nav: null, units: null, isRedeemed: false, balanceUnit: null } }
+      { $set: { nav: null, units: null, isRedeemed: false, balanceUnit: null, principalRedeem: 0, interestRedeem: 0 } }
     );
     res.json({ success: true });
   } catch (err) {

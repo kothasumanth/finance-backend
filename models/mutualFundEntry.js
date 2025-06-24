@@ -9,7 +9,9 @@ const mutualFundEntrySchema = new mongoose.Schema({
   nav: { type: Number },
   units: { type: Number },
   isRedeemed: { type: Boolean, default: false },
-  balanceUnit: { type: Number, default: 0 }
+  balanceUnit: { type: Number, default: 0 },
+  principalRedeem: { type: Number, default: 0 },
+  interestRedeem: { type: Number, default: 0 }
 });
 
 module.exports = mongoose.model('MutualFundEntry', mutualFundEntrySchema);
