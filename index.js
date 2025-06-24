@@ -4,6 +4,9 @@ const mongoose = require('mongoose');
 const User = require('./models/user');
 const MutualFundEntry = require('./models/mutualFundEntry');
 const MutualFundMetadata = require('./models/mutualFundMetadata');
+const PFInterest = require('./pfInterest');
+const PFType = require('./pfType');
+const PFEntry = require('./pfEntry');
 const cors = require('cors');
 
 const app = express();
@@ -264,6 +267,167 @@ app.post('/mutual-funds/force-null', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Error force null: ' + err.message });
+  }
+});
+
+// PF Interest endpoints
+app.get('/pf-interest', async (req, res) => {
+  try {
+    const data = await PFInterest.find().sort({ startDate: 1 });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Error fetching PF interest: ' + err.message });
+  }
+});
+
+app.post('/pf-interest', async (req, res) => {
+  try {
+    const { startDate, endDate, rateOfInterest } = req.body;
+    const newRow = new PFInterest({ startDate, endDate, rateOfInterest });
+    await newRow.save();
+    res.status(201).json(newRow);
+  } catch (err) {
+    res.status(500).json({ error: 'Error adding PF interest: ' + err.message });
+  }
+});
+
+app.put('/pf-interest/:id', async (req, res) => {
+  try {
+    const { startDate, endDate, rateOfInterest } = req.body;
+    const updated = await PFInterest.findByIdAndUpdate(
+      req.params.id,
+      { $set: { startDate, endDate, rateOfInterest } },
+      { new: true }
+    );
+    if (!updated) return res.status(404).json({ error: 'Entry not found' });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'Error updating PF interest: ' + err.message });
+  }
+});
+
+app.delete('/pf-interest/:id', async (req, res) => {
+  try {
+    const deleted = await PFInterest.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'Entry not found' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Error deleting PF interest: ' + err.message });
+  }
+});
+
+// PF Types endpoints
+app.get('/pf-types', async (req, res) => {
+  try {
+    const types = await PFType.find();
+    res.json(types);
+  } catch (err) {
+    res.status(500).json({ error: 'Error fetching PF types: ' + err.message });
+  }
+});
+
+app.post('/pf-types/seed', async (req, res) => {
+  try {
+    const types = ['PF', 'PPF', 'VPF'];
+    const inserted = await PFType.insertMany(
+      types.map(name => ({ name })),
+      { ordered: false }
+    ).catch(() => []); // ignore duplicate errors
+    res.json({ success: true, inserted });
+  } catch (err) {
+    res.status(500).json({ error: 'Error seeding PF types: ' + err.message });
+  }
+});
+
+// Bulk create PPF entries for a user for 15 years from a start date
+app.post('/pfentry/ppf-bulk-create', async (req, res) => {
+  try {
+    const { userId, pfTypeId, startDate } = req.body;
+    // Check if pfentries collection exists
+    const collections = await mongoose.connection.db.listCollections({ name: 'pfentries' }).toArray();
+    if (collections.length === 0) {
+      // Create collection by inserting a dummy and deleting it
+      const dummy = await PFEntry.create({
+        userId,
+        pfTypeId,
+        date: new Date(),
+        pfInterestId: (await PFInterest.findOne())?._id || new mongoose.Types.ObjectId(),
+        monthInterest: 0,
+        openingBalance: 0
+      });
+      await PFEntry.deleteOne({ _id: dummy._id });
+    }
+    // Now check for existing entries (force count, not findOne)
+    const count = await PFEntry.countDocuments({ userId, pfTypeId });
+    if (count > 0) return res.status(400).json({ error: 'PPF entries already exist for this user.' });
+    // --- Robust month increment logic ---
+    const start = new Date(startDate);
+    const startYear = start.getFullYear();
+    const startMonth = start.getMonth();
+    const entries = [];
+    for (let i = 0; i < 180; i++) { // 15 years * 12 months
+      const year = startYear + Math.floor((startMonth + i) / 12);
+      const month = (startMonth + i) % 12;
+      const entryDate = new Date(year, month, 1); // always 1st of month
+      const pfInterest = await PFInterest.findOne({
+        startDate: { $lte: entryDate },
+        endDate: { $gte: entryDate }
+      });
+      entries.push({
+        userId,
+        pfTypeId,
+        date: entryDate,
+        openingBalance: 0,
+        monthInterest: 0,
+        pfInterestId: pfInterest ? pfInterest._id : null,
+        amountDeposited: 0
+      });
+    }
+    const result = await PFEntry.insertMany(entries);
+    res.json({ success: true, count: result.length });
+  } catch (err) {
+    res.status(500).json({ error: 'Error bulk creating PPF entries: ' + err.message });
+  }
+});
+
+// Get pfentries for user and pfTypeId
+app.get('/pfentry/user/:userId/type/:pfTypeId', async (req, res) => {
+  try {
+    const entries = await PFEntry.find({ userId: req.params.userId, pfTypeId: req.params.pfTypeId });
+    res.json(entries);
+  } catch (err) {
+    res.status(500).json({ error: 'Error fetching pfentries: ' + err.message });
+  }
+});
+
+// Endpoint to force-create pfentries collection
+app.post('/pfentry/create-collection', async (req, res) => {
+  try {
+    // Use a valid pfInterestId for schema
+    const pfInterest = await PFInterest.findOne();
+    if (!pfInterest) return res.status(400).json({ error: 'No PFInterest found. Please create at least one PFInterest record first.' });
+    const dummy = await PFEntry.create({
+      userId: new mongoose.Types.ObjectId(),
+      pfTypeId: new mongoose.Types.ObjectId(),
+      date: new Date(),
+      pfInterestId: pfInterest._id,
+      monthInterest: 0,
+      openingBalance: 0
+    });
+    await PFEntry.deleteOne({ _id: dummy._id });
+    res.json({ success: true, message: 'pfentries collection created.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Error creating pfentries collection: ' + err.message });
+  }
+});
+
+// Delete all pfentries for user and pfTypeId
+app.delete('/pfentry/user/:userId/type/:pfTypeId', async (req, res) => {
+  try {
+    const result = await PFEntry.deleteMany({ userId: req.params.userId, pfTypeId: req.params.pfTypeId });
+    res.json({ success: true, deletedCount: result.deletedCount });
+  } catch (err) {
+    res.status(500).json({ error: 'Error deleting pfentries: ' + err.message });
   }
 });
 
