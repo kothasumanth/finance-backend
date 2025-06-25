@@ -361,14 +361,20 @@ app.post('/pfentry/ppf-bulk-create', async (req, res) => {
     const count = await PFEntry.countDocuments({ userId, pfTypeId });
     if (count > 0) return res.status(400).json({ error: 'PPF entries already exist for this user.' });
     // --- Robust month increment logic ---
-    const start = new Date(startDate);
+    let start = new Date(startDate);
+    // Always use the 1st of the month for the start date
+    start = new Date(start.getFullYear(), start.getMonth(), 1);
+    // If start month is before April, adjust to April 1 of that year
+    if (start.getMonth() < 3) {
+      start = new Date(start.getFullYear(), 3, 1);
+    }
     const startYear = start.getFullYear();
     const startMonth = start.getMonth();
     const entries = [];
     for (let i = 0; i < 180; i++) { // 15 years * 12 months
       const year = startYear + Math.floor((startMonth + i) / 12);
       const month = (startMonth + i) % 12;
-      const entryDate = new Date(year, month, 1); // always 1st of month
+      const entryDate = new Date(Date.UTC(year, month, 1)); // always 1st of month, UTC
       const pfInterest = await PFInterest.findOne({
         startDate: { $lte: entryDate },
         endDate: { $gte: entryDate }
@@ -428,6 +434,22 @@ app.delete('/pfentry/user/:userId/type/:pfTypeId', async (req, res) => {
     res.json({ success: true, deletedCount: result.deletedCount });
   } catch (err) {
     res.status(500).json({ error: 'Error deleting pfentries: ' + err.message });
+  }
+});
+
+// Update a PFEntry (date, amountDeposited, monthInterest)
+app.put('/pfentry/:id', async (req, res) => {
+  try {
+    const { date, amountDeposited, monthInterest } = req.body;
+    const update = {};
+    if (date) update.date = date;
+    if (amountDeposited !== undefined) update.amountDeposited = amountDeposited;
+    if (monthInterest !== undefined) update.monthInterest = monthInterest;
+    const updated = await PFEntry.findByIdAndUpdate(req.params.id, { $set: update }, { new: true });
+    if (!updated) return res.status(404).json({ error: 'Entry not found' });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'Error updating pfentry: ' + err.message });
   }
 });
 
