@@ -8,6 +8,8 @@ const pfEntrySchema = new mongoose.Schema({
   monthInterest: { type: Number, required: false },
   openingBalance: { type: Number, required: false },
   amountDeposited: { type: Number, required: false, default: 0 },
+  balance: { type: Number, required: false, default: 0 },
+  lowestBalance: { type: Number, required: false, default: 0 },
 });
 
 const PFEntry = mongoose.model('PFEntry', pfEntrySchema);

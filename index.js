@@ -371,6 +371,7 @@ app.post('/pfentry/ppf-bulk-create', async (req, res) => {
     const startYear = start.getFullYear();
     const startMonth = start.getMonth();
     const entries = [];
+    let prevBalance = 0;
     for (let i = 0; i < 180; i++) { // 15 years * 12 months
       const year = startYear + Math.floor((startMonth + i) / 12);
       const month = (startMonth + i) % 12;
@@ -379,6 +380,26 @@ app.post('/pfentry/ppf-bulk-create', async (req, res) => {
         startDate: { $lte: entryDate },
         endDate: { $gte: entryDate }
       });
+      // Calculate lowestBalance
+      let amountDeposited = 0; // default for bulk create
+      let day = 1; // always 1st for bulk create
+      let lowestBalance = 0;
+      if (i === 0) {
+        lowestBalance = 0; // first record
+      } else {
+        if (day > 5) {
+          lowestBalance = prevBalance;
+        } else {
+          lowestBalance = prevBalance + amountDeposited;
+        }
+      }
+      // Calculate balance
+      let balance = 0;
+      if (day > 5) {
+        balance = lowestBalance + amountDeposited;
+      } else {
+        balance = lowestBalance;
+      }
       entries.push({
         userId,
         pfTypeId,
@@ -386,8 +407,11 @@ app.post('/pfentry/ppf-bulk-create', async (req, res) => {
         openingBalance: 0,
         monthInterest: 0,
         pfInterestId: pfInterest ? pfInterest._id : null,
-        amountDeposited: 0
+        amountDeposited,
+        lowestBalance,
+        balance
       });
+      prevBalance = balance;
     }
     const result = await PFEntry.insertMany(entries);
     res.json({ success: true, count: result.length });
@@ -441,13 +465,82 @@ app.delete('/pfentry/user/:userId/type/:pfTypeId', async (req, res) => {
 app.put('/pfentry/:id', async (req, res) => {
   try {
     const { date, amountDeposited, monthInterest } = req.body;
-    const update = {};
-    if (date) update.date = date;
-    if (amountDeposited !== undefined) update.amountDeposited = amountDeposited;
-    if (monthInterest !== undefined) update.monthInterest = monthInterest;
-    const updated = await PFEntry.findByIdAndUpdate(req.params.id, { $set: update }, { new: true });
-    if (!updated) return res.status(404).json({ error: 'Entry not found' });
-    res.json(updated);
+    // Find the entry to update
+    const entry = await PFEntry.findById(req.params.id);
+    if (!entry) return res.status(404).json({ error: 'Entry not found' });
+    // Update the entry with new values
+    if (date) entry.date = date;
+    if (amountDeposited !== undefined) entry.amountDeposited = amountDeposited;
+    if (monthInterest !== undefined) entry.monthInterest = monthInterest;
+    await entry.save();
+    // Get all entries for this user and pfTypeId, sorted by date
+    const allEntries = await PFEntry.find({ userId: entry.userId, pfTypeId: entry.pfTypeId }).sort({ date: 1 });
+    // Find the index of the edited entry
+    const idx = allEntries.findIndex(e => e._id.toString() === entry._id.toString());
+    // Recalculate lowestBalance and balance from the edited entry onwards
+    let prevBalance = idx > 0 ? allEntries[idx - 1].balance || 0 : 0;
+    for (let i = idx; i < allEntries.length; i++) {
+      const e = allEntries[i];
+      // Use the possibly updated values for the edited entry
+      const d = new Date(i === idx && date ? date : e.date);
+      const day = d.getUTCDate();
+      // Use the possibly updated amountDeposited for the edited entry
+      const amt = i === idx && amountDeposited !== undefined ? amountDeposited : e.amountDeposited;
+      let lowestBalance = 0;
+      if (i === 0) {
+        lowestBalance = 0;
+      } else {
+        if (day > 5) {
+          lowestBalance = prevBalance;
+        } else {
+          lowestBalance = prevBalance + amt;
+        }
+      }
+      // If this is an April entry, add sum of last year's monthly interests
+      if (d.getUTCMonth() === 3) { // April is month 3 (0-based)
+        // Find all entries in the previous April-March period
+        const currentYear = d.getUTCFullYear();
+        const lastApril = new Date(Date.UTC(currentYear - 1, 3, 1));
+        const thisMarch = new Date(Date.UTC(currentYear, 2, 31, 23, 59, 59, 999));
+        // Sum monthInterest for all entries in that period
+        const lastYearInterests = allEntries.filter(e2 => {
+          const ed = new Date(e2.date);
+          return ed >= lastApril && ed <= thisMarch;
+        }).reduce((sum, e2) => sum + (typeof e2.monthInterest === 'number' ? e2.monthInterest : 0), 0);
+        lowestBalance += lastYearInterests;
+      }
+      let balance = 0;
+      if (day > 5) {
+        balance = lowestBalance + amt;
+      } else {
+        balance = lowestBalance;
+      }
+      e.lowestBalance = lowestBalance;
+      e.balance = balance;
+      // If this is the edited entry, update date and amountDeposited if changed
+      if (i === idx) {
+        if (date) e.date = date;
+        if (amountDeposited !== undefined) e.amountDeposited = amountDeposited;
+        if (monthInterest !== undefined) e.monthInterest = monthInterest;
+      }
+      // Recalculate monthInterest using lowestBalance and ROI
+      let roi = 0;
+      if (e.pfInterestId) {
+        // Use an IIFE to allow await inside forEach
+        await (async () => {
+          const pfInterest = await PFInterest.findById(e.pfInterestId);
+          if (pfInterest && pfInterest.rateOfInterest) {
+            roi = pfInterest.rateOfInterest;
+          }
+        })();
+      }
+      e.monthInterest = Math.round((lowestBalance * roi) / 1200); // Save as integer (0 decimal places)
+      await e.save();
+      prevBalance = balance;
+    }
+    // Return all updated entries for UI refresh
+    const updatedEntries = await PFEntry.find({ userId: entry.userId, pfTypeId: entry.pfTypeId });
+    res.json({ success: true, updatedEntries });
   } catch (err) {
     res.status(500).json({ error: 'Error updating pfentry: ' + err.message });
   }
