@@ -6,7 +6,6 @@ const pfEntrySchema = new mongoose.Schema({
   date: { type: Date, required: true },
   pfInterestId: { type: mongoose.Schema.Types.ObjectId, ref: 'PFInterest', required: true },
   monthInterest: { type: Number, required: false },
-  openingBalance: { type: Number, required: false },
   amountDeposited: { type: Number, required: false, default: 0 },
   balance: { type: Number, required: false, default: 0 },
   lowestBalance: { type: Number, required: false, default: 0 },

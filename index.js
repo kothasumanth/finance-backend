@@ -352,8 +352,7 @@ app.post('/pfentry/ppf-bulk-create', async (req, res) => {
         pfTypeId,
         date: new Date(),
         pfInterestId: (await PFInterest.findOne())?._id || new mongoose.Types.ObjectId(),
-        monthInterest: 0,
-        openingBalance: 0
+        monthInterest: 0
       });
       await PFEntry.deleteOne({ _id: dummy._id });
     }
@@ -404,7 +403,6 @@ app.post('/pfentry/ppf-bulk-create', async (req, res) => {
         userId,
         pfTypeId,
         date: entryDate,
-        openingBalance: 0,
         monthInterest: 0,
         pfInterestId: pfInterest ? pfInterest._id : null,
         amountDeposited,
@@ -441,8 +439,7 @@ app.post('/pfentry/create-collection', async (req, res) => {
       pfTypeId: new mongoose.Types.ObjectId(),
       date: new Date(),
       pfInterestId: pfInterest._id,
-      monthInterest: 0,
-      openingBalance: 0
+      monthInterest: 0
     });
     await PFEntry.deleteOne({ _id: dummy._id });
     res.json({ success: true, message: 'pfentries collection created.' });
