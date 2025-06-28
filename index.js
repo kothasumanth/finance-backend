@@ -546,6 +546,79 @@ app.put('/pfentry/:id', async (req, res) => {
   }
 });
 
+// Recalculate all PF entries for all users and PF types
+app.post('/pfentry/recalculate-all', async (req, res) => {
+  try {
+    const pfTypes = await PFType.find();
+    const users = await User.find();
+    let totalUpdated = 0;
+    for (const pfType of pfTypes) {
+      for (const user of users) {
+        const allEntries = await PFEntry.find({ userId: user._id, pfTypeId: pfType._id }).sort({ date: 1 });
+        if (!allEntries.length) continue;
+        let prevBalance = 0;
+        for (let i = 0; i < allEntries.length; i++) {
+          const e = allEntries[i];
+          const d = new Date(e.date);
+          const day = d.getUTCDate();
+          const amt = e.amountDeposited;
+          // Find correct PFInterest for this entry's date
+          const pfInterest = await PFInterest.findOne({
+            startDate: { $lte: d },
+            endDate: { $gte: d }
+          });
+          if (!pfInterest) {
+            throw new Error(`No PFInterest found for entry date ${d.toISOString().slice(0,10)} (user: ${user._id}, pfType: ${pfType._id})`);
+          }
+          let roi = 0;
+          if (pfInterest && pfInterest.rateOfInterest) {
+            roi = pfInterest.rateOfInterest;
+            e.pfInterestId = pfInterest._id;
+          } else {
+            e.pfInterestId = undefined;
+          }
+          let lowestBalance = 0;
+          if (i === 0) {
+            lowestBalance = 0;
+          } else {
+            if (day > 5) {
+              lowestBalance = prevBalance;
+            } else {
+              lowestBalance = prevBalance + amt;
+            }
+          }
+          // If this is an April entry, add sum of last year's monthly interests
+          if (d.getUTCMonth() === 3) { // April is month 3 (0-based)
+            const currentYear = d.getUTCFullYear();
+            const lastApril = new Date(Date.UTC(currentYear - 1, 3, 1));
+            const thisMarch = new Date(Date.UTC(currentYear, 2, 31, 23, 59, 59, 999));
+            const lastYearInterests = allEntries.filter(e2 => {
+              const ed = new Date(e2.date);
+              return ed >= lastApril && ed <= thisMarch;
+            }).reduce((sum, e2) => sum + (typeof e2.monthInterest === 'number' ? e2.monthInterest : 0), 0);
+            lowestBalance += lastYearInterests;
+          }
+          let balance = 0;
+          if (day > 5) {
+            balance = lowestBalance + amt;
+          } else {
+            balance = lowestBalance;
+          }
+          e.lowestBalance = lowestBalance;
+          e.balance = balance;
+          e.monthInterest = Math.round((lowestBalance * roi) / 1200);
+          await e.save();
+          prevBalance = balance;
+          totalUpdated++;
+        }
+      }
+    }
+    res.json({ success: true, totalUpdated });
+  } catch (err) {
+    res.status(500).json({ error: 'Error recalculating all pfentries: ' + err.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
