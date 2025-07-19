@@ -1,6 +1,8 @@
+const goldEntryRouter = require('./goldEntry');
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
+const goldPriceRouter = require('./goldPrice');
 const User = require('./models/user');
 const MutualFundEntry = require('./models/mutualFundEntry');
 const MutualFundMetadata = require('./models/mutualFundMetadata');
@@ -12,6 +14,8 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use('/gold-entries', goldEntryRouter);
+app.use('/gold-price', goldPriceRouter);
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/finance_copilot', {
