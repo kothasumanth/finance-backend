@@ -1,7 +1,8 @@
-const goldEntryRouter = require('./goldEntry');
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
+const cors = require('cors');
+const goldEntryRouter = require('./goldEntry');
 const goldPriceRouter = require('./goldPrice');
 const User = require('./models/user');
 const MutualFundEntry = require('./models/mutualFundEntry');
@@ -9,7 +10,7 @@ const MutualFundMetadata = require('./models/mutualFundMetadata');
 const PFInterest = require('./pfInterest');
 const PFType = require('./pfType');
 const PFEntry = require('./pfEntry');
-const cors = require('cors');
+const FDDetails = require('./fdDetails');
 
 const app = express();
 app.use(cors());
@@ -127,8 +128,8 @@ app.get('/mutualfund-metadata', async (req, res) => {
 
 app.post('/mutualfund-metadata', async (req, res) => {
   try {
-    const { MutualFundName, GoogleValue } = req.body;
-    const newMeta = new MutualFundMetadata({ MutualFundName, GoogleValue });
+    const { MutualFundName, GoogleValue, ActiveOrPassive, IndexOrManaged, CapType } = req.body;
+    const newMeta = new MutualFundMetadata({ MutualFundName, GoogleValue, ActiveOrPassive, IndexOrManaged, CapType });
     await newMeta.save();
     res.status(201).json(newMeta);
   } catch (err) {
@@ -138,10 +139,10 @@ app.post('/mutualfund-metadata', async (req, res) => {
 
 app.put('/mutualfund-metadata/:id', async (req, res) => {
   try {
-    const { MutualFundName, GoogleValue } = req.body;
+    const { MutualFundName, GoogleValue, ActiveOrPassive, IndexOrManaged, CapType } = req.body;
     const updated = await MutualFundMetadata.findByIdAndUpdate(
       req.params.id,
-      { MutualFundName, GoogleValue },
+      { MutualFundName, GoogleValue, ActiveOrPassive, IndexOrManaged, CapType },
       { new: true }
     );
     if (!updated) return res.status(404).json({ error: 'Metadata not found' });
@@ -696,6 +697,32 @@ app.post('/pfentry/recalculate-all', async (req, res) => {
     res.json({ success: true, totalUpdated });
   } catch (err) {
     res.status(500).json({ error: 'Error recalculating all pfentries: ' + err.message });
+  }
+});
+
+// FDDetails routes
+app.get('/fd-details', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+    const entries = await FDDetails.find({ userId });
+    res.json(entries);
+  } catch (err) {
+    res.status(500).json({ error: 'Error fetching FD details: ' + err.message });
+  }
+});
+
+app.post('/fd-details', async (req, res) => {
+  try {
+    const { userId, bankName, accountNo, principal, interestRate, period, maturityAmount, typeOfAccount, openDate } = req.body;
+    if (!userId || !bankName || !accountNo || !principal || !interestRate || !period || !maturityAmount || !typeOfAccount || !openDate) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const newFD = new FDDetails({ userId, bankName, accountNo, principal, interestRate, period, maturityAmount, typeOfAccount, openDate });
+    await newFD.save();
+    res.status(201).json(newFD);
+  } catch (err) {
+    res.status(500).json({ error: 'Error saving FD details: ' + err.message });
   }
 });
 
