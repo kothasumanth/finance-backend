@@ -1,0 +1,352 @@
+[{
+  "_id": {
+    "$oid": "685a31044e8429d45a035a9b"
+  },
+  "MutualFundName": "Motilal Oswal Nifty Bank Index Fund Direct Growth",
+  "GoogleValue": "147620",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c50387a1a8bcf6f0f9c16a",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685a31f54e8429d45a035b4f"
+  },
+  "MutualFundName": "Edelweiss MSCI India Domestic & World Healthcare 45 Index Fund Direct Growth",
+  "GoogleValue": "148555",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c503c0a1a8bcf6f0f9c170",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685a47c24e8429d45a035ef1"
+  },
+  "MutualFundName": "Motilal Oswal Nasdaq 100 Fund of Fund Direct Growth",
+  "GoogleValue": "145552",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c50387a1a8bcf6f0f9c16a",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685de2c41fe574ceb0d750c3"
+  },
+  "MutualFundName": "ICICI Prudential Nifty 50 Index Plan Direct Growth",
+  "GoogleValue": "120620",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c50387a1a8bcf6f0f9c16a",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685de2da1fe574ceb0d750c8"
+  },
+  "MutualFundName": "ICICI Prudential US Bluechip Equity Fund Direct Growth",
+  "GoogleValue": "120186",
+  "__v": 0,
+  "ActiveOrPassive": "A",
+  "CapType": "68c50387a1a8bcf6f0f9c16a",
+  "IndexOrManaged": "M"
+},
+{
+  "_id": {
+    "$oid": "685de2e71fe574ceb0d750ca"
+  },
+  "MutualFundName": "Motilal Oswal S&P 500 Index Fund Direct Growth",
+  "GoogleValue": "148381",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c50387a1a8bcf6f0f9c16a",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685de2f61fe574ceb0d750cc"
+  },
+  "MutualFundName": "SBI Nifty Next 50 Index Fund Direct Growth",
+  "GoogleValue": "148945",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c50387a1a8bcf6f0f9c16a",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685de3001fe574ceb0d750ce"
+  },
+  "MutualFundName": "SBI Nifty Smallcap 250 Index Fund Direct Growth",
+  "GoogleValue": "150677",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c50390a1a8bcf6f0f9c16c",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685de30c1fe574ceb0d750d0"
+  },
+  "MutualFundName": "Zerodha Nifty LargeMidcap 250 Index Fund Direct Growth",
+  "GoogleValue": "152156",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c503d2a1a8bcf6f0f9c173",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685de3141fe574ceb0d750d2"
+  },
+  "MutualFundName": "SBI Large & Midcap Fund Direct Growth",
+  "GoogleValue": "119721",
+  "__v": 0,
+  "ActiveOrPassive": "A",
+  "CapType": "68c503d2a1a8bcf6f0f9c173",
+  "IndexOrManaged": "M"
+},
+{
+  "_id": {
+    "$oid": "685de3221fe574ceb0d750d4"
+  },
+  "MutualFundName": "ICICI Prudential Nifty Bank Index Fund Regular Growth",
+  "GoogleValue": "149858",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c50387a1a8bcf6f0f9c16a",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685de32a1fe574ceb0d750d6"
+  },
+  "MutualFundName": "Franklin India Flexi Cap Fund Growth",
+  "GoogleValue": "118535",
+  "__v": 0,
+  "ActiveOrPassive": "A",
+  "CapType": "68c503c0a1a8bcf6f0f9c170",
+  "IndexOrManaged": "M"
+},
+{
+  "_id": {
+    "$oid": "685de3321fe574ceb0d750d8"
+  },
+  "MutualFundName": "Navi Nifty Bank Index Fund Direct Growth",
+  "GoogleValue": "149804",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c50387a1a8bcf6f0f9c16a",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685de3391fe574ceb0d750da"
+  },
+  "MutualFundName": "Navi Nifty 50 Index Fund Direct Growth",
+  "GoogleValue": "149039",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c50387a1a8bcf6f0f9c16a",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685de3421fe574ceb0d750dc"
+  },
+  "MutualFundName": "Invesco India Smallcap Fund Direct Growth",
+  "GoogleValue": "145137",
+  "__v": 0,
+  "ActiveOrPassive": "A",
+  "CapType": "68c50390a1a8bcf6f0f9c16c",
+  "IndexOrManaged": "M"
+},
+{
+  "_id": {
+    "$oid": "685de34e1fe574ceb0d750de"
+  },
+  "MutualFundName": "Motilal Oswal Large and Midcap Fund Direct Growth",
+  "GoogleValue": "147704",
+  "__v": 0,
+  "ActiveOrPassive": "A",
+  "CapType": "68c503d2a1a8bcf6f0f9c173",
+  "IndexOrManaged": "M"
+},
+{
+  "_id": {
+    "$oid": "685de3561fe574ceb0d750e0"
+  },
+  "MutualFundName": "Quant Small Cap Fund Growth Option Direct",
+  "GoogleValue": "100177",
+  "__v": 0,
+  "ActiveOrPassive": "A",
+  "CapType": "68c50390a1a8bcf6f0f9c16c",
+  "IndexOrManaged": "M"
+},
+{
+  "_id": {
+    "$oid": "685de35e1fe574ceb0d750e2"
+  },
+  "MutualFundName": "Navi BSE Sensex Index Fund Direct Growth",
+  "GoogleValue": "152062",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c50387a1a8bcf6f0f9c16a",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685de3651fe574ceb0d750e4"
+  },
+  "MutualFundName": "Navi Flexi Cap Fund Direct Growth",
+  "GoogleValue": "143793",
+  "__v": 0,
+  "ActiveOrPassive": "A",
+  "CapType": "68c503c0a1a8bcf6f0f9c170",
+  "IndexOrManaged": "M"
+},
+{
+  "_id": {
+    "$oid": "685de36b1fe574ceb0d750e6"
+  },
+  "MutualFundName": "Navi Large & Mid Cap Fund Direct Plan Growth",
+  "GoogleValue": "135677",
+  "__v": 0,
+  "ActiveOrPassive": "A",
+  "CapType": "68c503d2a1a8bcf6f0f9c173",
+  "IndexOrManaged": "M"
+},
+{
+  "_id": {
+    "$oid": "685de3721fe574ceb0d750e8"
+  },
+  "MutualFundName": "Motilal Oswal Midcap Direct Growth",
+  "GoogleValue": "127042",
+  "__v": 0,
+  "ActiveOrPassive": "A",
+  "CapType": "68c507ef4fc7ace51326b0a0",
+  "IndexOrManaged": "M"
+},
+{
+  "_id": {
+    "$oid": "685de3791fe574ceb0d750ea"
+  },
+  "MutualFundName": "Nippon India Large Cap Fund Direct Growth",
+  "GoogleValue": "118632",
+  "__v": 0,
+  "ActiveOrPassive": "A",
+  "CapType": "68c50387a1a8bcf6f0f9c16a",
+  "IndexOrManaged": "M"
+},
+{
+  "_id": {
+    "$oid": "685de3811fe574ceb0d750ec"
+  },
+  "MutualFundName": "Franklin India Feeder - Franklin U.S. Opportunities Fund Growth",
+  "GoogleValue": "118551",
+  "__v": 0,
+  "ActiveOrPassive": "A",
+  "CapType": "68c50387a1a8bcf6f0f9c16a",
+  "IndexOrManaged": "M"
+},
+{
+  "_id": {
+    "$oid": "685de3871fe574ceb0d750ee"
+  },
+  "MutualFundName": "ICICI Prudential Nifty Pharma Index Fund Direct Growth",
+  "GoogleValue": "150930",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c503c0a1a8bcf6f0f9c170",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685de38d1fe574ceb0d750f0"
+  },
+  "MutualFundName": "ICICI Prudential Nifty IT Index Fund Direct Growth",
+  "GoogleValue": "150468",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c503c0a1a8bcf6f0f9c170",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685de3941fe574ceb0d750f2"
+  },
+  "MutualFundName": "ICICI Prudential Business Cycle Fund Direct Growth",
+  "GoogleValue": "148651",
+  "__v": 0,
+  "ActiveOrPassive": "A",
+  "CapType": "68c503c0a1a8bcf6f0f9c170",
+  "IndexOrManaged": "M"
+},
+{
+  "_id": {
+    "$oid": "685de39b1fe574ceb0d750f4"
+  },
+  "MutualFundName": "Nippon India ETF Gold BeES",
+  "GoogleValue": "140088",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c503e5a1a8bcf6f0f9c176",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685de3a91fe574ceb0d750f6"
+  },
+  "MutualFundName": "Motilal Oswal Nifty 50 Index Fund Direct Growth",
+  "GoogleValue": "147794",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c50387a1a8bcf6f0f9c16a",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685eb6e0861af77aa10d172d"
+  },
+  "MutualFundName": "Navi Nifty Midcap 150 Index Fund Direct Growth",
+  "GoogleValue": "149892",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c507ef4fc7ace51326b0a0",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685f656982e59fe10a783d80"
+  },
+  "MutualFundName": "Bandhan Nifty Smallcap 250 Index Fund Direct Growth",
+  "GoogleValue": "152264",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c50390a1a8bcf6f0f9c16c",
+  "IndexOrManaged": "I"
+},
+{
+  "_id": {
+    "$oid": "685f695882e59fe10a783dd7"
+  },
+  "MutualFundName": "Motilal Oswal Small Cap Fund Direct Growth",
+  "GoogleValue": "152237",
+  "__v": 0,
+  "ActiveOrPassive": "A",
+  "CapType": "68c50390a1a8bcf6f0f9c16c",
+  "IndexOrManaged": "M"
+},
+{
+  "_id": {
+    "$oid": "685f76a182e59fe10a783ee3"
+  },
+  "MutualFundName": "ICICI Prudential BSE Sensex Index Fund Direct Growth",
+  "GoogleValue": "141841",
+  "__v": 0,
+  "ActiveOrPassive": "P",
+  "CapType": "68c50387a1a8bcf6f0f9c16a",
+  "IndexOrManaged": "I"
+}]

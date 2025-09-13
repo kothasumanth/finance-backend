@@ -1,0 +1,78 @@
+[{
+  "_id": {
+    "$oid": "68c50387a1a8bcf6f0f9c16a"
+  },
+  "name": "Large",
+  "createdAt": {
+    "$date": "2025-09-13T05:39:19.752Z"
+  },
+  "updatedAt": {
+    "$date": "2025-09-13T05:39:19.752Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "68c50390a1a8bcf6f0f9c16c"
+  },
+  "name": "Small",
+  "createdAt": {
+    "$date": "2025-09-13T05:39:28.609Z"
+  },
+  "updatedAt": {
+    "$date": "2025-09-13T05:39:28.609Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "68c503c0a1a8bcf6f0f9c170"
+  },
+  "name": "Mix",
+  "createdAt": {
+    "$date": "2025-09-13T05:40:16.493Z"
+  },
+  "updatedAt": {
+    "$date": "2025-09-13T05:40:16.493Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "68c503d2a1a8bcf6f0f9c173"
+  },
+  "name": "Large & Mid",
+  "createdAt": {
+    "$date": "2025-09-13T05:40:34.201Z"
+  },
+  "updatedAt": {
+    "$date": "2025-09-13T05:40:34.201Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "68c503e5a1a8bcf6f0f9c176"
+  },
+  "name": "Others",
+  "createdAt": {
+    "$date": "2025-09-13T05:40:53.486Z"
+  },
+  "updatedAt": {
+    "$date": "2025-09-13T05:40:53.486Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "68c507ef4fc7ace51326b0a0"
+  },
+  "name": "Mid",
+  "createdAt": {
+    "$date": "2025-09-13T05:58:07.641Z"
+  },
+  "updatedAt": {
+    "$date": "2025-09-13T05:58:07.641Z"
+  },
+  "__v": 0
+}]
