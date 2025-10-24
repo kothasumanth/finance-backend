@@ -20,6 +20,7 @@ app.use('/gold-entries', goldEntryRouter);
 app.use('/gold-price', goldPriceRouter);
 app.use('/', mfCapTypesRouter);
 app.use('/expected-percentages', require('./routes/expectedPercentages'));
+app.use('/', require('./sipInfo')); // Add SIP Info routes
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/finance_copilot', {
