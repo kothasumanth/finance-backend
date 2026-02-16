@@ -73,6 +73,22 @@ app.get('/users-table-json', async (req, res) => {
   }
 });
 
+// Create a new user (name must be unique, case-insensitive)
+app.post('/users', async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Missing name' });
+    // Check uniqueness case-insensitively
+    const existing = await User.findOne({ name: { $regex: `^${name.trim()}$`, $options: 'i' } });
+    if (existing) return res.status(400).json({ error: 'User already exists' });
+    const newUser = new User({ name: name.trim() });
+    await newUser.save();
+    res.status(201).json(newUser);
+  } catch (err) {
+    res.status(500).json({ error: 'Error creating user: ' + err.message });
+  }
+});
+
 // Get mutual fund entries for a user (populate fundName)
 app.get('/mutual-funds/:userId', async (req, res) => {
   try {
@@ -182,21 +198,35 @@ app.delete('/mutualfund-metadata/:id', async (req, res) => {
 // NAV API endpoint for mutual fund (returns { date, nav } or blanks)
 app.get('/mf-api', async (req, res) => {
   const googleValue = req.query.googleValue;
+  console.log('\n🔍 [MF-API] Incoming Request:');
+  console.log(`   googleValue: ${googleValue}`);
+  
   if (!googleValue) {
+    console.log('   ❌ Missing googleValue parameter');
     return res.status(400).json({ error: 'Missing googleValue parameter' });
   }
+  
   const mfApiUrl = `https://api.mfapi.in/mf/${googleValue}/latest`;
+  console.log(`   📡 Fetching from: ${mfApiUrl}`);
+  
   try {
-    const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
     const response = await fetch(mfApiUrl);
+    console.log(`   ✅ Response Status: ${response.status}`);
+    
     const rawText = await response.text();
+    console.log(`   📦 Raw Response:\n${rawText}`);
+    
     let data;
     try {
       data = JSON.parse(rawText);
+      console.log(`   ✅ Parsed JSON:`, JSON.stringify(data, null, 2));
     } catch (e) {
+      console.log(`   ❌ JSON Parse Error: ${e.message}`);
       data = {};
     }
+    
     if (data && data.data && data.data.length > 0) {
+      console.log(`   ✅ Found data. Date: ${data.data[0].date}, NAV: ${data.data[0].nav}`);
       return res.json({
         date: data.data[0].date || '',
         nav: data.data[0].nav || '',
@@ -204,9 +234,11 @@ app.get('/mf-api', async (req, res) => {
         mfApiRawResponse: rawText
       });
     } else {
+      console.log(`   ⚠️  No data array found or empty. Returning blank date/nav`);
       return res.json({ date: '', nav: '', mfApiUrl, mfApiRawResponse: rawText });
     }
   } catch (err) {
+    console.log(`   ❌ Error: ${err.message}`);
     return res.json({ date: '', nav: '' });
   }
 });
