@@ -10,7 +10,6 @@ const MutualFundMetadata = require('./models/mutualFundMetadata');
 const PFInterest = require('./pfInterest');
 const PFType = require('./pfType');
 const PFEntry = require('./pfEntry');
-const FDDetails = require('./fdDetails');
 const mfCapTypesRouter = require('./mfCapTypes');
 
 const app = express();
@@ -746,32 +745,6 @@ app.post('/pfentry/recalculate-all', async (req, res) => {
     res.json({ success: true, totalUpdated });
   } catch (err) {
     res.status(500).json({ error: 'Error recalculating all pfentries: ' + err.message });
-  }
-});
-
-// FDDetails routes
-app.get('/fd-details', async (req, res) => {
-  try {
-    const { userId } = req.query;
-    if (!userId) return res.status(400).json({ error: 'Missing userId' });
-    const entries = await FDDetails.find({ userId });
-    res.json(entries);
-  } catch (err) {
-    res.status(500).json({ error: 'Error fetching FD details: ' + err.message });
-  }
-});
-
-app.post('/fd-details', async (req, res) => {
-  try {
-    const { userId, bankName, accountNo, principal, interestRate, period, maturityAmount, typeOfAccount, openDate } = req.body;
-    if (!userId || !bankName || !accountNo || !principal || !interestRate || !period || !maturityAmount || !typeOfAccount || !openDate) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
-    const newFD = new FDDetails({ userId, bankName, accountNo, principal, interestRate, period, maturityAmount, typeOfAccount, openDate });
-    await newFD.save();
-    res.status(201).json(newFD);
-  } catch (err) {
-    res.status(500).json({ error: 'Error saving FD details: ' + err.message });
   }
 });
 

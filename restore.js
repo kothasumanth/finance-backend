@@ -38,7 +38,7 @@ async function restore() {
             }
           };
           
-          // Convert all potential ID fields
+          // Convert all potential ID fields in all collections
           convertId('_id');
           convertId('userId');
           convertId('fundName');
