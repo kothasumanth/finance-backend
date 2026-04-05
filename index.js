@@ -748,6 +748,148 @@ app.post('/pfentry/recalculate-all', async (req, res) => {
   }
 });
 
+// Get NAV data for a specific mutual fund (last 30 days from today)
+app.get('/mf-nav/:userId/:fundName', async (req, res) => {
+  try {
+    const { userId, fundName } = req.params;
+    const decodedFundName = decodeURIComponent(fundName);
+    
+    console.log(`\n🔍 [MF-NAV] Fetching NAV for: "${decodedFundName}"`);
+    
+    // Find the mutual fund metadata by name to get GoogleValue
+    const metadata = await MutualFundMetadata.findOne({ MutualFundName: decodedFundName });
+    
+    let googleValue = null;
+    if (metadata && metadata.GoogleValue) {
+      googleValue = metadata.GoogleValue;
+      console.log(`✅ Found metadata with GoogleValue: ${googleValue}`);
+    } else {
+      console.log(`⚠️  No metadata found in DB, will try to search by name in API`);
+    }
+    
+    if (!googleValue) {
+      console.log(`❌ No GoogleValue found. Cannot fetch NAV data.`);
+      return res.status(400).json({ 
+        error: 'GoogleValue not configured for this mutual fund',
+        suggestion: 'Please add the mutual fund metadata with GoogleValue from mfapi.in'
+      });
+    }
+    
+    console.log(`📡 Fetching from mfapi.in with GoogleValue: ${googleValue}`);
+    
+    // Fetch NAV data from mfapi.in
+    const mfApiUrl = `https://api.mfapi.in/mf/${googleValue}`;
+    console.log(`   URL: ${mfApiUrl}`);
+    
+    const response = await fetch(mfApiUrl);
+    
+    if (!response.ok) {
+      console.log(`❌ API returned status: ${response.status}`);
+      return res.status(500).json({ 
+        error: `API error: ${response.status}`,
+        mfApiUrl 
+      });
+    }
+    
+    const data = await response.json();
+    
+    if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
+      console.log(`⚠️  No data array in API response`);
+      return res.json([]);
+    }
+    
+    console.log(`✅ Received ${data.data.length} total NAV records from API`);
+    console.log(`   First record: ${JSON.stringify(data.data[0])}`);
+    console.log(`   Last record: ${JSON.stringify(data.data[data.data.length - 1])}`);
+    
+    // Calculate 30 days ago from today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    console.log(`📅 Filtering from ${thirtyDaysAgo.toLocaleDateString()} to ${today.toLocaleDateString()}`);
+    
+    // Parse and filter NAV data for last 30 days
+    const filteredData = [];
+    
+    for (const item of data.data) {
+      if (!item.date) continue;
+      
+      try {
+        // Parse date format: DD-MM-YYYY (e.g., "02-04-2026" for April 2, 2026)
+        const dateParts = item.date.trim().split('-');
+        if (dateParts.length !== 3) {
+          console.log(`   ⚠️  Skipping invalid date format: "${item.date}"`);
+          continue;
+        }
+        
+        const day = parseInt(dateParts[0], 10);
+        const month = parseInt(dateParts[1], 10) - 1; // Month is 0-indexed in JavaScript
+        const year = parseInt(dateParts[2], 10);
+        
+        if (isNaN(day) || isNaN(month + 1) || isNaN(year)) {
+          console.log(`   ⚠️  Invalid date components: "${item.date}"`);
+          continue;
+        }
+        
+        const itemDate = new Date(year, month, day);
+        itemDate.setHours(0, 0, 0, 0);
+        
+        // Check if date is within last 30 days
+        if (itemDate >= thirtyDaysAgo && itemDate <= today) {
+          // Convert back to DD-MMM-YYYY format for display
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const displayDate = `${String(day).padStart(2, '0')}-${monthNames[month]}-${year}`;
+          
+          filteredData.push({
+            date: displayDate,
+            nav: item.nav,
+            originalDate: item.date
+          });
+        }
+      } catch (err) {
+        console.log(`   ⚠️  Error parsing date item: ${item.date}`, err.message);
+        continue;
+      }
+    }
+    
+    console.log(`✅ Filtered to ${filteredData.length} records from last 30 days`);
+    
+    if (filteredData.length === 0) {
+      console.log(`⚠️  No data found in last 30 days`);
+    }
+    
+    // Sort by date (oldest first)
+    filteredData.sort((a, b) => {
+      const [aDay, aMonthStr, aYear] = a.date.split('-');
+      const [bDay, bMonthStr, bYear] = b.date.split('-');
+      
+      const monthMap = {
+        'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+        'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+      };
+      
+      const aDate = new Date(parseInt(aYear), monthMap[aMonthStr], parseInt(aDay));
+      const bDate = new Date(parseInt(bYear), monthMap[bMonthStr], parseInt(bDay));
+      
+      return aDate - bDate;
+    });
+    
+    // Remove the originalDate field before sending to frontend
+    const finalData = filteredData.map(({ originalDate, ...rest }) => rest);
+    
+    res.json(finalData);
+  } catch (err) {
+    console.error('❌ Error fetching NAV data:', err.message);
+    console.error(err.stack);
+    res.status(500).json({ 
+      error: 'Error fetching NAV data: ' + err.message
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
