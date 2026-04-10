@@ -335,8 +335,8 @@ app.get('/pf-interest', async (req, res) => {
 
 app.post('/pf-interest', async (req, res) => {
   try {
-    const { startDate, endDate, rateOfInterest } = req.body;
-    const newRow = new PFInterest({ startDate, endDate, rateOfInterest });
+    const { startDate, endDate, rateOfInterest, pfType } = req.body;
+    const newRow = new PFInterest({ startDate, endDate, rateOfInterest, pfType });
     await newRow.save();
     res.status(201).json(newRow);
   } catch (err) {
@@ -346,10 +346,10 @@ app.post('/pf-interest', async (req, res) => {
 
 app.put('/pf-interest/:id', async (req, res) => {
   try {
-    const { startDate, endDate, rateOfInterest } = req.body;
+    const { startDate, endDate, rateOfInterest, pfType } = req.body;
     const updated = await PFInterest.findByIdAndUpdate(
       req.params.id,
-      { $set: { startDate, endDate, rateOfInterest } },
+      { $set: { startDate, endDate, rateOfInterest, pfType } },
       { new: true }
     );
     if (!updated) return res.status(404).json({ error: 'Entry not found' });
