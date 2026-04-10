@@ -13,6 +13,9 @@ dist/
 Thumbs.db
 package-lock.json
 
+# Database Backups (contain sensitive personal data)
+DBData_Backup/
+
 # VSCode
 .vscode/
 
