@@ -428,9 +428,11 @@ app.post('/pfentry/ppf-bulk-create', async (req, res) => {
       const year = startYear + Math.floor((startMonth + i) / 12);
       const month = (startMonth + i) % 12;
       const entryDate = new Date(Date.UTC(year, month, 1)); // always 1st of month, UTC
+      // Prefer PFInterest rows that match the provided pfTypeId (ensures PF vs PPF rates)
       const pfInterest = await PFInterest.findOne({
         startDate: { $lte: entryDate },
-        endDate: { $gte: entryDate }
+        endDate: { $gte: entryDate },
+        pfType: pfTypeId
       });
       // Calculate lowestBalance
       let amountDeposited = 0; // default for bulk create
@@ -507,9 +509,11 @@ app.post('/pfentry/pf-bulk-create', async (req, res) => {
       const year = startYear + Math.floor((startMonth + i) / 12);
       const month = (startMonth + i) % 12;
       const entryDate = new Date(Date.UTC(year, month, 1)); // always 1st of month, UTC
+      // Prefer PFInterest rows that match the provided pfTypeId (ensures PF vs PPF rates)
       const pfInterest = await PFInterest.findOne({
         startDate: { $lte: entryDate },
-        endDate: { $gte: entryDate }
+        endDate: { $gte: entryDate },
+        pfType: pfTypeId
       });
       // Calculate lowestBalance
       let amountDeposited = 0; // default for bulk create
@@ -599,8 +603,8 @@ app.put('/pfentry/:id', async (req, res) => {
     if (!entry) return res.status(404).json({ error: 'Entry not found' });
     // Update the entry with new values
     if (date) entry.date = date;
-    if (amountDeposited !== undefined) entry.amountDeposited = amountDeposited;
-    if (monthInterest !== undefined) entry.monthInterest = monthInterest;
+  if (amountDeposited !== undefined) entry.amountDeposited = amountDeposited;
+  if (monthInterest !== undefined) entry.monthInterest = Number(Number(monthInterest).toFixed(2));
     await entry.save();
     // Get all entries for this user and pfTypeId, sorted by date
     const allEntries = await PFEntry.find({ userId: entry.userId, pfTypeId: entry.pfTypeId }).sort({ date: 1 });
@@ -650,20 +654,30 @@ app.put('/pfentry/:id', async (req, res) => {
       if (i === idx) {
         if (date) e.date = date;
         if (amountDeposited !== undefined) e.amountDeposited = amountDeposited;
-        if (monthInterest !== undefined) e.monthInterest = monthInterest;
+        if (monthInterest !== undefined) e.monthInterest = Number(Number(monthInterest).toFixed(2));
       }
       // Recalculate monthInterest using lowestBalance and ROI
       let roi = 0;
-      if (e.pfInterestId) {
-        // Use an IIFE to allow await inside forEach
-        await (async () => {
-          const pfInterest = await PFInterest.findById(e.pfInterestId);
-          if (pfInterest && pfInterest.rateOfInterest) {
-            roi = pfInterest.rateOfInterest;
-          }
-        })();
+      // Find PFInterest for this entry's date that matches its pfTypeId (ensures PF vs PPF selection)
+      try {
+        const pfInterestForDate = await PFInterest.findOne({
+          startDate: { $lte: d },
+          endDate: { $gte: d },
+          pfType: e.pfTypeId
+        });
+        if (pfInterestForDate && pfInterestForDate.rateOfInterest) {
+          roi = pfInterestForDate.rateOfInterest;
+          // ensure the entry references the correct PFInterest
+          e.pfInterestId = pfInterestForDate._id;
+        } else {
+          // if no matching PFInterest, clear the reference so we don't accidentally use wrong rates
+          e.pfInterestId = undefined;
+        }
+      } catch (err) {
+        // leave roi as 0 on error
       }
-      e.monthInterest = Math.round((lowestBalance * roi) / 1200); // Save as integer (0 decimal places)
+  // Save monthInterest as float with 2 decimal places
+  e.monthInterest = Number(((lowestBalance * roi) / 1200).toFixed(2));
       await e.save();
       prevBalance = balance;
     }
@@ -678,7 +692,16 @@ app.put('/pfentry/:id', async (req, res) => {
 // Recalculate all PF entries for all users and PF types
 app.post('/pfentry/recalculate-all', async (req, res) => {
   try {
-    const pfTypes = await PFType.find();
+    // Allow optional restriction to a single pfTypeId to avoid mixing PF/PPF runs
+    const requestedPfTypeId = (req.body && req.body.pfTypeId) || req.query.pfTypeId || null;
+    let pfTypes;
+    if (requestedPfTypeId) {
+      const single = await PFType.findById(requestedPfTypeId);
+      if (!single) return res.status(400).json({ error: 'Invalid pfTypeId provided' });
+      pfTypes = [single];
+    } else {
+      pfTypes = await PFType.find();
+    }
     const users = await User.find();
     let totalUpdated = 0;
     for (const pfType of pfTypes) {
@@ -692,10 +715,41 @@ app.post('/pfentry/recalculate-all', async (req, res) => {
           const day = d.getUTCDate();
           const amt = e.amountDeposited;
           // Find correct PFInterest for this entry's date
-          const pfInterest = await PFInterest.findOne({
+          // Find PFInterest matching date and pfType for this entry
+          // Try to find a PFInterest that covers this date for the pfType.
+          // Use a robust lookup with fallbacks in case of timezone/precision issues or slightly mismatched ranges.
+          let pfInterest = await PFInterest.findOne({
             startDate: { $lte: d },
-            endDate: { $gte: d }
+            endDate: { $gte: d },
+            pfType: pfType._id
           });
+
+          if (!pfInterest) {
+            // Fallback: fetch all PFInterest rows for this pfType and match by normalized date (UTC midnight)
+            const candidates = await PFInterest.find({ pfType: pfType._id }).sort({ startDate: -1 });
+            const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+            for (const cand of candidates) {
+              try {
+                const s = new Date(cand.startDate);
+                const e = new Date(cand.endDate);
+                const sNorm = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate()));
+                const eNorm = new Date(Date.UTC(e.getUTCFullYear(), e.getUTCMonth(), e.getUTCDate()));
+                if (target >= sNorm && target <= eNorm) {
+                  pfInterest = cand;
+                  break;
+                }
+              } catch (err) {
+                // ignore parse errors and continue
+              }
+            }
+          }
+
+          if (!pfInterest) {
+            // As an extra fallback, try to pick the most recent PFInterest whose startDate is <= target date
+            const fallback = await PFInterest.findOne({ pfType: pfType._id, startDate: { $lte: d } }).sort({ startDate: -1 });
+            if (fallback) pfInterest = fallback;
+          }
+
           if (!pfInterest) {
             throw new Error(`No PFInterest found for entry date ${d.toISOString().slice(0,10)} (user: ${user._id}, pfType: ${pfType._id})`);
           }
@@ -735,7 +789,8 @@ app.post('/pfentry/recalculate-all', async (req, res) => {
           }
           e.lowestBalance = lowestBalance;
           e.balance = balance;
-          e.monthInterest = Math.round((lowestBalance * roi) / 1200);
+          // Save monthInterest as float with 2 decimal places
+          e.monthInterest = Number(((lowestBalance * roi) / 1200).toFixed(2));
           await e.save();
           prevBalance = balance;
           totalUpdated++;
