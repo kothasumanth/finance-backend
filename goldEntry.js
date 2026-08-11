@@ -27,14 +27,18 @@ router.get('/', async (req, res) => {
 
 // Create or update a gold entry
 router.post('/', async (req, res) => {
-  const { _id, userId, purchaseDate, grams, price, comments } = req.body;
+  const { _id, userId, purchaseDate, grams, price, karat, comments } = req.body;
   try {
     let entry;
     if (_id) {
-      entry = await GoldEntry.findByIdAndUpdate(_id, { userId, purchaseDate, grams, price, comments }, { new: true });
+      entry = await GoldEntry.findByIdAndUpdate(
+        _id,
+        { userId, purchaseDate, grams, price, karat, comments },
+        { new: true }
+      );
     } else {
       if (!userId) return res.status(400).json({ error: 'userId is required' });
-      entry = new GoldEntry({ userId, purchaseDate, grams, price, comments });
+      entry = new GoldEntry({ userId, purchaseDate, grams, price, karat, comments });
       await entry.save();
     }
     res.json(entry);

@@ -5,6 +5,7 @@ const goldEntrySchema = new mongoose.Schema({
   purchaseDate: { type: Date, required: true },
   grams: { type: Number, required: true },
   price: { type: Number, required: true },
+  karat: { type: Number, enum: [18, 22, 24], required: true },
   comments: { type: String }
 });
 
