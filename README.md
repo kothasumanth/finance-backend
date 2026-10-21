@@ -25,6 +25,20 @@ The database runs locally without authentication:
 - MongoDB automatically creates the `finance_copilot` database on first connection
 - Collections are created automatically as you add data
 
+## User Login and Security
+
+Set `AUTH_JWT_SECRET` to a cryptographically random value with at least 32 characters in the local `.env` and the hosting provider's private environment variables. Set `FRONTEND_ORIGIN` to the exact deployed frontend origin in the backend host. The app uses HttpOnly session cookies; the frontend proxies `/api` to this service so browser requests remain same-origin.
+
+Before deploying authentication for the first time, initialize existing accounts against the intended database:
+
+```powershell
+$env:INITIAL_USER_PASSWORD = "use a temporary password"
+npm run initialize-users
+Remove-Item Env:\INITIAL_USER_PASSWORD
+```
+
+The script sets a password hash and requires each existing user to choose a new password at first login. The user named `Sumanth` is assigned the administrator role for shared finance settings. New accounts use the Add User / Create account form and are private to that account. Do not use the temporary password again after users have changed it.
+
 ### First Time Setup on New Laptop
 1. Install MongoDB Community Edition
 2. Clone/copy the project

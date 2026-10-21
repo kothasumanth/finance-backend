@@ -1,7 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const cors = require('cors');
+const cookieParser = require('cookie-parser');
+const helmet = require('helmet');
 const goldEntryRouter = require('./goldEntry');
 const goldPriceRouter = require('./goldPrice');
 const User = require('./models/user');
@@ -11,10 +12,31 @@ const PFInterest = require('./pfInterest');
 const PFType = require('./pfType');
 const PFEntry = require('./pfEntry');
 const mfCapTypesRouter = require('./mfCapTypes');
+const authRouter = require('./routes/auth');
+const { requireAdminForSharedWrites, requireAuth, requirePasswordChanged, requireSameOrigin } = require('./auth');
+const { authorizeOwnedData } = require('./authorization');
+
+if (typeof process.env.AUTH_JWT_SECRET !== 'string' || process.env.AUTH_JWT_SECRET.length < 32) {
+  throw new Error('Set AUTH_JWT_SECRET to a random value of at least 32 characters');
+}
 
 const app = express();
-app.use(cors());
+app.set('trust proxy', 1);
+app.use(helmet());
 app.use(express.json());
+app.use(cookieParser());
+app.use(requireSameOrigin);
+
+app.get('/', (req, res) => {
+  res.send('Hello World! Your app is running.');
+});
+
+app.use('/auth', authRouter);
+app.use(requireAuth);
+app.use(requirePasswordChanged);
+app.use(authorizeOwnedData);
+app.use(requireAdminForSharedWrites);
+
 app.use('/gold-entries', goldEntryRouter);
 app.use('/gold-price', goldPriceRouter);
 app.use('/', mfCapTypesRouter);
@@ -28,11 +50,6 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/finance_c
 })
 .then(() => console.log('MongoDB connected'))
 .catch((err) => console.error('MongoDB connection error:', err));
-
-// Sample route
-app.get('/', (req, res) => {
-  res.send('Hello World! Your app is running.');
-});
 
 // Get user by ID
 app.get('/users/:userId', async (req, res) => {
