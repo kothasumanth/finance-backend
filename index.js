@@ -13,6 +13,7 @@ const PFType = require('./pfType');
 const PFEntry = require('./pfEntry');
 const mfCapTypesRouter = require('./mfCapTypes');
 const authRouter = require('./routes/auth');
+const expensesRouter = require('./routes/expenses');
 const { requireAdminForSharedWrites, requireAuth, requirePasswordChanged, requireSameOrigin } = require('./auth');
 const { authorizeOwnedData } = require('./authorization');
 
@@ -39,6 +40,7 @@ app.use(requireAdminForSharedWrites);
 
 app.use('/gold-entries', goldEntryRouter);
 app.use('/gold-price', goldPriceRouter);
+app.use('/expenses', expensesRouter);
 app.use('/', mfCapTypesRouter);
 app.use('/expected-percentages', require('./routes/expectedPercentages'));
 app.use('/', require('./sipInfo')); // Add SIP Info routes

@@ -12,7 +12,7 @@ This is a Node.js + Express.js web application with MongoDB integration. It is d
 3. Start MongoDB (it should auto-start on most systems).
 4. Start the server:
    ```powershell
-   node index.js
+   npm start
    ```
 5. Open your browser and go to `http://localhost:3000`.
 
@@ -24,6 +24,14 @@ The database runs locally without authentication:
 - **No username/password required**
 - MongoDB automatically creates the `finance_copilot` database on first connection
 - Collections are created automatically as you add data
+
+### Local Development vs Production
+
+- Keep the local `.env` pointed at the local database (`mongodb://localhost:27017/finance_copilot`) while developing. Never point local testing at production unless you intentionally need to and have a verified backup.
+- Start the local backend from this repository with `npm start`; it listens on `http://localhost:3000`.
+- The frontend's Vite development proxy calls this local backend. A direct unauthenticated API request may return `401`, which means the backend is responding but requires a login cookie.
+- Render runs the backend from the configured production branch and uses Render's environment variables and production MongoDB URI. Local `.env` values are not deployed.
+- Make and test changes on a feature branch. Commit and push that branch, then merge a pull request into `main` only when ready for production. Confirm Render is configured to deploy `main`; do not push unfinished work to `main`.
 
 ## User Login and Security
 
@@ -38,6 +46,12 @@ Remove-Item Env:\INITIAL_USER_PASSWORD
 ```
 
 The script sets a password hash and requires each existing user to choose a new password at first login. The user named `Sumanth` is assigned the administrator role for shared finance settings. New accounts use the Add User / Create account form and are private to that account. Do not use the temporary password again after users have changed it.
+
+## Daily Expenses
+
+Expense types and expense entries are scoped to the signed-in account. Expense entries store a calendar date, a positive amount, and a reference to that account's expense type; they do not store free-text descriptions.
+
+The authenticated `/expenses` API supports listing and editing expense types, saving up to 100 entries in one request, a month-by-month total overview, and year/month category analysis. Renaming an expense type also changes the name shown for its existing entries.
 
 ### First Time Setup on New Laptop
 1. Install MongoDB Community Edition
