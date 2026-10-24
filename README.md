@@ -53,6 +53,12 @@ Expense types and expense entries are scoped to the signed-in account. Expense e
 
 The authenticated `/expenses` API supports listing and editing expense types, saving up to 100 entries in one request, a month-by-month total overview, and year/month category analysis. Renaming an expense type also changes the name shown for its existing entries.
 
+## Roles and User Administration
+
+The `roles` collection stores the `Admin` and `Member` roles; each user references a role document. On backend startup, role documents are created if needed, legacy user roles are migrated, `Sumanth` is assigned Admin, and other unassigned users are assigned Member. New registrations default to Member. The migration runs only for users without a role assignment, so later admin role changes are preserved.
+
+Only an Admin can list users, change roles, or delete accounts. Deleting an account disables it first, removes that user's records from every user-owned collection, then removes the account. If cleanup fails, the account remains disabled and an Admin can retry the deletion from Manage Users. The primary `Sumanth` account, the current Admin's own account, and the last active Admin cannot be deleted or demoted.
+
 ### First Time Setup on New Laptop
 1. Install MongoDB Community Edition
 2. Clone/copy the project

@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const goldEntryRouter = require('./goldEntry');
 const goldPriceRouter = require('./goldPrice');
 const User = require('./models/user');
+const Role = require('./models/role');
 const MutualFundEntry = require('./models/mutualFundEntry');
 const MutualFundMetadata = require('./models/mutualFundMetadata');
 const PFInterest = require('./pfInterest');
@@ -14,6 +15,8 @@ const PFEntry = require('./pfEntry');
 const mfCapTypesRouter = require('./mfCapTypes');
 const authRouter = require('./routes/auth');
 const expensesRouter = require('./routes/expenses');
+const adminRouter = require('./routes/admin');
+const { ensureRoleData } = require('./roleSetup');
 const { requireAdminForSharedWrites, requireAuth, requirePasswordChanged, requireSameOrigin } = require('./auth');
 const { authorizeOwnedData } = require('./authorization');
 
@@ -37,6 +40,7 @@ app.use(requireAuth);
 app.use(requirePasswordChanged);
 app.use(authorizeOwnedData);
 app.use(requireAdminForSharedWrites);
+app.use('/admin', adminRouter);
 
 app.use('/gold-entries', goldEntryRouter);
 app.use('/gold-price', goldPriceRouter);
@@ -44,14 +48,6 @@ app.use('/expenses', expensesRouter);
 app.use('/', mfCapTypesRouter);
 app.use('/expected-percentages', require('./routes/expectedPercentages'));
 app.use('/', require('./sipInfo')); // Add SIP Info routes
-
-// MongoDB connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/finance_copilot', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('MongoDB connected'))
-.catch((err) => console.error('MongoDB connection error:', err));
 
 // Get user by ID
 app.get('/users/:userId', async (req, res) => {
@@ -99,7 +95,14 @@ app.post('/users', async (req, res) => {
     // Check uniqueness case-insensitively
     const existing = await User.findOne({ name: { $regex: `^${name.trim()}$`, $options: 'i' } });
     if (existing) return res.status(400).json({ error: 'User already exists' });
-    const newUser = new User({ name: name.trim() });
+    const memberRole = await Role.findOne({ key: 'member' });
+    if (!memberRole) throw new Error('Member role is not initialized');
+    const normalizedName = name.trim().normalize('NFKC');
+    const newUser = new User({
+      name: normalizedName,
+      normalizedName: normalizedName.toLocaleLowerCase('en-US'),
+      roleId: memberRole._id
+    });
     await newUser.save();
     res.status(201).json(newUser);
   } catch (err) {
@@ -965,6 +968,17 @@ app.get('/mf-nav/:userId/:fundName', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+
+async function startServer() {
+  await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/finance_copilot');
+  console.log('MongoDB connected');
+  await ensureRoleData();
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+startServer().catch(error => {
+  console.error('Server startup failed:', error);
+  process.exitCode = 1;
 });

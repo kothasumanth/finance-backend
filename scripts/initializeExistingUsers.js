@@ -2,6 +2,7 @@ require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 const User = require('../models/user');
+const { ensureRoleData } = require('../roleSetup');
 
 function normalizeName(name) {
   return name.trim().normalize('NFKC').toLocaleLowerCase('en-US');
@@ -18,6 +19,7 @@ async function initializeExistingUsers() {
 
   await mongoose.connect(process.env.MONGODB_URI);
   try {
+    await ensureRoleData();
     const users = await User.find().select('+passwordHash');
     const names = new Set();
     for (const user of users) {
@@ -38,7 +40,6 @@ async function initializeExistingUsers() {
       user.normalizedName = normalizeName(user.name);
       user.passwordHash = await bcrypt.hash(initialPassword, 12);
       user.mustChangePassword = true;
-      user.role = user.normalizedName === 'sumanth' ? 'admin' : 'user';
       await user.save();
     }
     console.log(`Initialized ${pendingUsers.length} existing account(s); each must change the temporary password at next login.`);

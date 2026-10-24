@@ -4,6 +4,14 @@ const User = require('./models/user');
 const COOKIE_NAME = 'finance_session';
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
 
+function getRoleKey(user) {
+  return user.roleId?.key || (user.role === 'admin' ? 'admin' : 'member');
+}
+
+function isAdmin(user) {
+  return getRoleKey(user) === 'admin';
+}
+
 function createToken(user) {
   if (!process.env.AUTH_JWT_SECRET) {
     throw new Error('AUTH_JWT_SECRET must be configured before authentication can be used');
@@ -50,8 +58,8 @@ async function requireAuth(req, res, next) {
       audience: 'finance-copilot-web',
       issuer: 'finance-copilot'
     });
-    const user = await User.findById(payload.sub).select('+passwordHash');
-    if (!user || !user.passwordHash) {
+    const user = await User.findById(payload.sub).select('+passwordHash').populate('roleId');
+    if (!user || !user.passwordHash || !user.isActive) {
       clearSessionCookie(res);
       return res.status(401).json({ error: 'Please log in again' });
     }
@@ -96,7 +104,7 @@ function requireAdminForSharedWrites(req, res, next) {
   ]);
   const routeKey = `${req.method} ${req.path.replace(/[0-9a-f]{24}(?=\/|$)/gi, ':id')}`;
 
-  if (adminOnlyWrites.has(routeKey) && req.user.role !== 'admin') {
+  if (adminOnlyWrites.has(routeKey) && !isAdmin(req.user)) {
     return res.status(403).json({ error: 'Only the administrator can change shared settings' });
   }
   return next();
@@ -123,5 +131,6 @@ module.exports = {
   requireAdminForSharedWrites,
   requirePasswordChanged,
   requireSameOrigin,
+  isAdmin,
   setSessionCookie
 };

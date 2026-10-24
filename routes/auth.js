@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const User = require('../models/user');
+const Role = require('../models/role');
 const { requireAuth, setSessionCookie, clearSessionCookie } = require('../auth');
 
 const router = express.Router();
@@ -38,9 +39,9 @@ router.post('/login', loginLimiter, async (req, res, next) => {
   }
 
   try {
-    const user = await User.findOne({ normalizedName: normalizeName(name) }).select('+passwordHash');
+    const user = await User.findOne({ normalizedName: normalizeName(name) }).select('+passwordHash').populate('roleId');
     const passwordMatches = user?.passwordHash && await bcrypt.compare(password, user.passwordHash);
-    if (!passwordMatches) {
+    if (!passwordMatches || !user.isActive) {
       return res.status(401).json({ error: 'Invalid name or password' });
     }
 
@@ -48,7 +49,7 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     return res.json({
       user: { id: user._id, name: user.name },
       mustChangePassword: user.mustChangePassword,
-      isAdmin: user.role === 'admin'
+      isAdmin: user.roleId?.key === 'admin'
     });
   } catch (error) {
     return next(error);
@@ -67,11 +68,14 @@ router.post('/register', registrationLimiter, async (req, res, next) => {
   try {
     const normalizedName = normalizeName(name);
     const passwordHash = await bcrypt.hash(password, passwordRounds);
+    const memberRole = await Role.findOne({ key: 'member' });
+    if (!memberRole) throw new Error('Member role is not initialized');
     const user = await User.create({
       name: name.trim().normalize('NFKC'),
       normalizedName,
       passwordHash,
-      mustChangePassword: false
+      mustChangePassword: false,
+      roleId: memberRole._id
     });
 
     setSessionCookie(res, user);
@@ -88,7 +92,7 @@ router.get('/me', requireAuth, (req, res) => {
   res.json({
     user: { id: req.user._id, name: req.user.name },
     mustChangePassword: req.user.mustChangePassword,
-    isAdmin: req.user.role === 'admin'
+    isAdmin: req.user.roleId?.key === 'admin'
   });
 });
 
@@ -112,7 +116,7 @@ router.post('/change-password', requireAuth, async (req, res, next) => {
     setSessionCookie(res, req.user);
     return res.json({
       user: { id: req.user._id, name: req.user.name },
-      isAdmin: req.user.role === 'admin'
+      isAdmin: req.user.roleId?.key === 'admin'
     });
   } catch (error) {
     return next(error);
