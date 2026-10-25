@@ -51,7 +51,7 @@ The script sets a password hash and requires each existing user to choose a new 
 
 Expense types and expense entries are scoped to the signed-in account. Expense entries store a calendar date, a positive amount, optional comments, and a reference to that account's expense type; the expense type is selected instead of entering a free-text description.
 
-The authenticated `/expenses` API supports listing and editing expense types, saving up to 100 entries in one request, editing and deleting owned entries, a month-by-month total overview, daily entry listings by month, and year/month category analysis. Comments are limited to 500 characters. Renaming an expense type also changes the name shown for its existing entries.
+The authenticated `/expenses` API supports listing, adding, editing, and deleting expense types (only when no entries use the type), saving up to 100 entries in one request, editing and deleting owned entries, a month-by-month total overview, daily entry listings by month, and year/month category analysis. Comments are limited to 500 characters. Renaming an expense type also changes the name shown for its existing entries.
 
 ## Roles and User Administration
 

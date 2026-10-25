@@ -72,6 +72,32 @@ router.put('/types/:id', async (req, res, next) => {
   }
 });
 
+router.delete('/types/:id', async (req, res, next) => {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(404).json({ error: 'Expense type not found' });
+  }
+
+  try {
+    const type = await ExpenseType.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!type) return res.status(404).json({ error: 'Expense type not found' });
+
+    const expenseCount = await Expense.countDocuments({
+      userId: req.user._id,
+      expenseTypeId: type._id
+    });
+    if (expenseCount > 0) {
+      return res.status(409).json({
+        error: 'Delete all expense entries associated with this expense type before deleting it.'
+      });
+    }
+
+    await ExpenseType.deleteOne({ _id: type._id, userId: req.user._id });
+    return res.json({ success: true });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/overview', async (req, res, next) => {
   try {
     const months = await Expense.aggregate([

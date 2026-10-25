@@ -310,3 +310,68 @@ test('rejects invalid analysis periods before querying expenses', async () => {
     Expense.aggregate = originalAggregate;
   }
 });
+
+test('deletes an expense type that has no associated entries', async () => {
+  const userId = new mongoose.Types.ObjectId();
+  const typeId = new mongoose.Types.ObjectId();
+  const originalFindOne = ExpenseType.findOne;
+  const originalCountDocuments = Expense.countDocuments;
+  const originalDeleteOne = ExpenseType.deleteOne;
+  let typeFilter;
+  let expenseFilter;
+  let deleteFilter;
+  ExpenseType.findOne = async filter => {
+    typeFilter = filter;
+    return { _id: typeId };
+  };
+  Expense.countDocuments = async filter => {
+    expenseFilter = filter;
+    return 0;
+  };
+  ExpenseType.deleteOne = async filter => {
+    deleteFilter = filter;
+    return { deletedCount: 1 };
+  };
+
+  try {
+    const { res } = await invoke('DELETE', '/types/:id', {
+      user: { _id: userId },
+      params: { id: typeId.toString() }
+    });
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.body, { success: true });
+    assert.deepEqual(typeFilter, { _id: typeId.toString(), userId });
+    assert.deepEqual(expenseFilter, { userId, expenseTypeId: typeId });
+    assert.deepEqual(deleteFilter, { _id: typeId, userId });
+  } finally {
+    ExpenseType.findOne = originalFindOne;
+    Expense.countDocuments = originalCountDocuments;
+    ExpenseType.deleteOne = originalDeleteOne;
+  }
+});
+
+test('prevents deleting an expense type that still has entries', async () => {
+  const userId = new mongoose.Types.ObjectId();
+  const typeId = new mongoose.Types.ObjectId();
+  const originalFindOne = ExpenseType.findOne;
+  const originalCountDocuments = Expense.countDocuments;
+  const originalDeleteOne = ExpenseType.deleteOne;
+  ExpenseType.findOne = async () => ({ _id: typeId });
+  Expense.countDocuments = async () => 1;
+  ExpenseType.deleteOne = async () => {
+    throw new Error('Expense types with entries must not be deleted');
+  };
+
+  try {
+    const { res } = await invoke('DELETE', '/types/:id', {
+      user: { _id: userId },
+      params: { id: typeId.toString() }
+    });
+    assert.equal(res.statusCode, 409);
+    assert.match(res.body.error, /Delete all expense entries associated/);
+  } finally {
+    ExpenseType.findOne = originalFindOne;
+    Expense.countDocuments = originalCountDocuments;
+    ExpenseType.deleteOne = originalDeleteOne;
+  }
+});
