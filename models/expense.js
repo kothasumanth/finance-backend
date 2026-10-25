@@ -4,7 +4,8 @@ const expenseSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   expenseTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'ExpenseType', required: true },
   date: { type: Date, required: true },
-  amount: { type: Number, required: true, min: 0.01 }
+  amount: { type: Number, required: true, min: 0.01 },
+  comments: { type: String, trim: true, maxlength: 500, default: '' }
 }, { timestamps: true });
 
 expenseSchema.index({ userId: 1, date: -1 });

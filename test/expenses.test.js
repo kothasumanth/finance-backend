@@ -63,7 +63,7 @@ test('creates a batch of expenses for the authenticated account only', async () 
       body: {
         userId: new mongoose.Types.ObjectId().toString(),
         entries: [
-          { date: '2026-10-20', expenseTypeId: expenseTypeId.toString(), amount: '42.50' },
+          { date: '2026-10-20', expenseTypeId: expenseTypeId.toString(), amount: '42.50', comments: '  Lunch with client  ' },
           { date: '2026-10-21', expenseTypeId: expenseTypeId.toString(), amount: 15 }
         ]
       }
@@ -74,6 +74,8 @@ test('creates a batch of expenses for the authenticated account only', async () 
     assert.ok(insertedEntries.every(entry => entry.userId === userId));
     assert.deepEqual(insertedEntries.map(entry => entry.amount), [42.5, 15]);
     assert.equal(insertedEntries[0].date.toISOString(), '2026-10-20T00:00:00.000Z');
+    assert.equal(insertedEntries[0].comments, 'Lunch with client');
+    assert.equal(insertedEntries[1].comments, '');
   } finally {
     ExpenseType.countDocuments = originalCountDocuments;
     Expense.insertMany = originalInsertMany;
@@ -118,6 +120,179 @@ test('rejects invalid calendar dates and non-positive amounts in a batch', async
   });
   assert.equal(res.statusCode, 400);
   assert.match(res.body.error, /Entry 1 needs a valid date/);
+});
+
+test('rejects comments longer than 500 characters', async () => {
+  const { res } = await invoke('POST', '/entries', {
+    body: {
+      entries: [{
+        date: '2026-10-21',
+        expenseTypeId: new mongoose.Types.ObjectId().toString(),
+        amount: 15,
+        comments: 'x'.repeat(501)
+      }]
+    }
+  });
+  assert.equal(res.statusCode, 400);
+  assert.match(res.body.error, /at most 500 characters/);
+});
+
+test('lists entries for the selected month, scoped to the signed-in account', async () => {
+  const userId = new mongoose.Types.ObjectId();
+  const expectedEntries = [{ amount: 15 }];
+  const originalFind = Expense.find;
+  let filter;
+  Expense.find = query => {
+    filter = query;
+    return {
+      select() {
+        return {
+          populate() {
+            return {
+              sort: async () => expectedEntries
+            };
+          }
+        };
+      }
+    };
+  };
+
+  try {
+    const { res } = await invoke('GET', '/entries', {
+      user: { _id: userId },
+      query: { year: '2026', month: '10' }
+    });
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.body, expectedEntries);
+    assert.equal(filter.userId, userId);
+    assert.deepEqual(filter.date, {
+      $gte: new Date('2026-10-01T00:00:00.000Z'),
+      $lt: new Date('2026-11-01T00:00:00.000Z')
+    });
+  } finally {
+    Expense.find = originalFind;
+  }
+});
+
+test('rejects invalid daily-view periods without querying entries', async () => {
+  const originalFind = Expense.find;
+  Expense.find = () => { throw new Error('Invalid periods must not query expenses'); };
+  try {
+    const invalidYear = await invoke('GET', '/entries', { query: { year: 'not-a-year', month: '10' } });
+    const invalidMonth = await invoke('GET', '/entries', { query: { year: '2026', month: '13' } });
+    assert.equal(invalidYear.res.statusCode, 400);
+    assert.equal(invalidMonth.res.statusCode, 400);
+  } finally {
+    Expense.find = originalFind;
+  }
+});
+
+test('updates only an expense owned by the signed-in account', async () => {
+  const userId = new mongoose.Types.ObjectId();
+  const entryId = new mongoose.Types.ObjectId();
+  const expenseTypeId = new mongoose.Types.ObjectId();
+  const updatedEntry = { _id: entryId, amount: 25 };
+  const originalExists = ExpenseType.exists;
+  const originalFindOneAndUpdate = Expense.findOneAndUpdate;
+  let updateFilter;
+  let updateDocument;
+  ExpenseType.exists = async filter => {
+    assert.deepEqual(filter, { _id: expenseTypeId.toString(), userId });
+    return true;
+  };
+  Expense.findOneAndUpdate = (filter, update, options) => {
+    updateFilter = filter;
+    updateDocument = update;
+    assert.deepEqual(options, { new: true, runValidators: true });
+    return { populate: async () => updatedEntry };
+  };
+
+  try {
+    const { res } = await invoke('PUT', '/entries/:id', {
+      user: { _id: userId },
+      params: { id: entryId.toString() },
+      body: {
+        date: '2026-10-22',
+        expenseTypeId: expenseTypeId.toString(),
+        amount: '25.50',
+        comments: '  Updated note  '
+      }
+    });
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body, updatedEntry);
+    assert.deepEqual(updateFilter, { _id: entryId.toString(), userId });
+    assert.deepEqual(updateDocument.$set, {
+      date: new Date('2026-10-22T00:00:00.000Z'),
+      expenseTypeId: expenseTypeId.toString(),
+      amount: 25.5,
+      comments: 'Updated note'
+    });
+  } finally {
+    ExpenseType.exists = originalExists;
+    Expense.findOneAndUpdate = originalFindOneAndUpdate;
+  }
+});
+
+test('does not update an expense that references another account’s type', async () => {
+  const originalExists = ExpenseType.exists;
+  const originalFindOneAndUpdate = Expense.findOneAndUpdate;
+  ExpenseType.exists = async () => false;
+  Expense.findOneAndUpdate = () => {
+    throw new Error('Expenses must not be updated with an unowned type');
+  };
+
+  try {
+    const { res } = await invoke('PUT', '/entries/:id', {
+      params: { id: new mongoose.Types.ObjectId().toString() },
+      body: {
+        date: '2026-10-22',
+        expenseTypeId: new mongoose.Types.ObjectId().toString(),
+        amount: 25
+      }
+    });
+    assert.equal(res.statusCode, 400);
+    assert.match(res.body.error, /belonging to your account/);
+  } finally {
+    ExpenseType.exists = originalExists;
+    Expense.findOneAndUpdate = originalFindOneAndUpdate;
+  }
+});
+
+test('deletes only an expense owned by the signed-in account', async () => {
+  const userId = new mongoose.Types.ObjectId();
+  const entryId = new mongoose.Types.ObjectId();
+  const originalDeleteOne = Expense.deleteOne;
+  let filter;
+  Expense.deleteOne = async query => {
+    filter = query;
+    return { deletedCount: 1 };
+  };
+
+  try {
+    const { res } = await invoke('DELETE', '/entries/:id', {
+      user: { _id: userId },
+      params: { id: entryId.toString() }
+    });
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.body, { success: true });
+    assert.deepEqual(filter, { _id: entryId.toString(), userId });
+  } finally {
+    Expense.deleteOne = originalDeleteOne;
+  }
+});
+
+test('returns not found when an expense is not owned by the signed-in account', async () => {
+  const originalDeleteOne = Expense.deleteOne;
+  Expense.deleteOne = async () => ({ deletedCount: 0 });
+  try {
+    const { res } = await invoke('DELETE', '/entries/:id', {
+      params: { id: new mongoose.Types.ObjectId().toString() }
+    });
+    assert.equal(res.statusCode, 404);
+    assert.match(res.body.error, /not found/);
+  } finally {
+    Expense.deleteOne = originalDeleteOne;
+  }
 });
 
 test('rejects invalid analysis periods before querying expenses', async () => {

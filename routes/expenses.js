@@ -149,6 +149,91 @@ router.get('/analysis', async (req, res, next) => {
   }
 });
 
+router.get('/entries', async (req, res, next) => {
+  const year = Number(req.query.year);
+  const month = Number(req.query.month);
+  if (!Number.isInteger(year) || year < 2000 || year > 9999) {
+    return res.status(400).json({ error: 'A valid year is required' });
+  }
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: 'Month must be between 1 and 12' });
+  }
+
+  const start = new Date(Date.UTC(year, month - 1, 1));
+  const end = new Date(Date.UTC(year, month, 1));
+  try {
+    const entries = await Expense.find({
+      userId: req.user._id,
+      date: { $gte: start, $lt: end }
+    })
+      .select('_id date amount comments expenseTypeId')
+      .populate('expenseTypeId', 'name')
+      .sort({ date: -1, _id: -1 });
+    return res.json(entries);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.put('/entries/:id', async (req, res, next) => {
+  const { date, expenseTypeId, amount: rawAmount, comments } = req.body || {};
+  const amount = Number(rawAmount);
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(404).json({ error: 'Expense entry not found' });
+  }
+  if (
+    !isValidDateOnly(date)
+    || !mongoose.isValidObjectId(expenseTypeId)
+    || !Number.isFinite(amount)
+    || amount <= 0
+  ) {
+    return res.status(400).json({ error: 'Enter a valid date, expense type, and positive amount' });
+  }
+  if (comments !== undefined && (typeof comments !== 'string' || comments.length > 500)) {
+    return res.status(400).json({ error: 'Comments must be text of at most 500 characters' });
+  }
+
+  try {
+    const ownedType = await ExpenseType.exists({ _id: expenseTypeId, userId: req.user._id });
+    if (!ownedType) {
+      return res.status(400).json({ error: 'Select an expense type belonging to your account' });
+    }
+
+    const entry = await Expense.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user._id },
+      {
+        $set: {
+          date: new Date(`${date}T00:00:00.000Z`),
+          expenseTypeId,
+          amount,
+          comments: typeof comments === 'string' ? comments.trim() : ''
+        }
+      },
+      { new: true, runValidators: true }
+    ).populate('expenseTypeId', 'name');
+    if (!entry) return res.status(404).json({ error: 'Expense entry not found' });
+    return res.json(entry);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete('/entries/:id', async (req, res, next) => {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(404).json({ error: 'Expense entry not found' });
+  }
+
+  try {
+    const result = await Expense.deleteOne({ _id: req.params.id, userId: req.user._id });
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'Expense entry not found' });
+    }
+    return res.json({ success: true });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/entries', async (req, res, next) => {
   const entries = req.body?.entries;
   if (!Array.isArray(entries) || entries.length === 0 || entries.length > 100) {
@@ -168,12 +253,18 @@ router.post('/entries', async (req, res, next) => {
     ) {
       return res.status(400).json({ error: `Entry ${index + 1} needs a valid date, expense type, and positive amount` });
     }
+    if (entry.comments !== undefined && (
+      typeof entry.comments !== 'string' || entry.comments.length > 500
+    )) {
+      return res.status(400).json({ error: `Comments for entry ${index + 1} must be text of at most 500 characters` });
+    }
 
     validatedEntries.push({
       userId,
       expenseTypeId: entry.expenseTypeId,
       date: new Date(`${entry.date}T00:00:00.000Z`),
-      amount
+      amount,
+      comments: typeof entry.comments === 'string' ? entry.comments.trim() : ''
     });
   }
 
