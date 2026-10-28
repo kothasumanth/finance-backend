@@ -146,7 +146,8 @@ router.get('/analysis', async (req, res, next) => {
         $group: {
           _id: '$expenseTypeId',
           total: { $sum: '$amount' },
-          entryCount: { $sum: 1 }
+          entryCount: { $sum: 1 },
+          entries: { $push: { date: '$date', amount: '$amount' } }
         }
       },
       {
@@ -166,7 +167,7 @@ router.get('/analysis', async (req, res, next) => {
         }
       },
       { $unwind: '$expenseType' },
-      { $project: { _id: 0, expenseTypeId: '$_id', name: '$expenseType.name', total: 1, entryCount: 1 } },
+      { $project: { _id: 0, expenseTypeId: '$_id', name: '$expenseType.name', total: 1, entryCount: 1, entries: 1 } },
       { $sort: { total: -1, name: 1 } }
     ]);
     return res.json(categories);

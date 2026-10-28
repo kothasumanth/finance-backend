@@ -295,6 +295,28 @@ test('returns not found when an expense is not owned by the signed-in account', 
   }
 });
 
+test('includes individual entries in category analysis', async () => {
+  const originalAggregate = Expense.aggregate;
+  let pipeline;
+  const entries = [
+    { date: new Date('2026-10-20T00:00:00.000Z'), amount: 42.5 },
+    { date: new Date('2026-10-21T00:00:00.000Z'), amount: 15 }
+  ];
+  Expense.aggregate = async stages => {
+    pipeline = stages;
+    return [{ expenseTypeId: new mongoose.Types.ObjectId(), name: 'Amazon', total: 57.5, entryCount: 2, entries }];
+  };
+
+  try {
+    const { res } = await invoke('GET', '/analysis', { query: { year: '2026', month: '10' } });
+    const groupStage = pipeline.find(stage => stage.$group);
+    assert.deepEqual(groupStage.$group.entries, { $push: { date: '$date', amount: '$amount' } });
+    assert.deepEqual(res.body[0].entries, entries);
+  } finally {
+    Expense.aggregate = originalAggregate;
+  }
+});
+
 test('rejects invalid analysis periods before querying expenses', async () => {
   const originalAggregate = Expense.aggregate;
   Expense.aggregate = async () => {
