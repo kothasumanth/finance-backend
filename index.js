@@ -19,6 +19,7 @@ const adminRouter = require('./routes/admin');
 const { ensureRoleData } = require('./roleSetup');
 const { requireAdminForSharedWrites, requireAuth, requirePasswordChanged, requireSameOrigin } = require('./auth');
 const { authorizeOwnedData } = require('./authorization');
+const { getMfHistory } = require('./mfApiCache');
 
 if (typeof process.env.AUTH_JWT_SECRET !== 'string' || process.env.AUTH_JWT_SECRET.length < 32) {
   throw new Error('Set AUTH_JWT_SECRET to a random value of at least 32 characters');
@@ -219,48 +220,33 @@ app.delete('/mutualfund-metadata/:id', async (req, res) => {
 // NAV API endpoint for mutual fund (returns { date, nav } or blanks)
 app.get('/mf-api', async (req, res) => {
   const googleValue = req.query.googleValue;
-  console.log('\n🔍 [MF-API] Incoming Request:');
-  console.log(`   googleValue: ${googleValue}`);
-  
-  if (!googleValue) {
-    console.log('   ❌ Missing googleValue parameter');
+  if (typeof googleValue !== 'string' || !googleValue.trim()) {
     return res.status(400).json({ error: 'Missing googleValue parameter' });
   }
-  
-  const mfApiUrl = `https://api.mfapi.in/mf/${googleValue}/latest`;
-  console.log(`   📡 Fetching from: ${mfApiUrl}`);
-  
+
+  const mfApiUrl = `https://api.mfapi.in/mf/${encodeURIComponent(googleValue)}/latest`;
   try {
-    const response = await fetch(mfApiUrl);
-    console.log(`   ✅ Response Status: ${response.status}`);
-    
-    const rawText = await response.text();
-    console.log(`   📦 Raw Response:\n${rawText}`);
-    
-    let data;
-    try {
-      data = JSON.parse(rawText);
-      console.log(`   ✅ Parsed JSON:`, JSON.stringify(data, null, 2));
-    } catch (e) {
-      console.log(`   ❌ JSON Parse Error: ${e.message}`);
-      data = {};
-    }
-    
-    if (data && data.data && data.data.length > 0) {
-      console.log(`   ✅ Found data. Date: ${data.data[0].date}, NAV: ${data.data[0].nav}`);
-      return res.json({
-        date: data.data[0].date || '',
-        nav: data.data[0].nav || '',
-        mfApiUrl,
-        mfApiRawResponse: rawText
-      });
-    } else {
-      console.log(`   ⚠️  No data array found or empty. Returning blank date/nav`);
-      return res.json({ date: '', nav: '', mfApiUrl, mfApiRawResponse: rawText });
-    }
+    const history = await getMfHistory(googleValue);
+    const latest = history.data[0];
+    return res.json({
+      date: latest?.date || '',
+      nav: latest?.nav || '',
+      mfApiUrl,
+      mfApiRawResponse: JSON.stringify({ data: latest ? [latest] : [] })
+    });
   } catch (err) {
-    console.log(`   ❌ Error: ${err.message}`);
-    return res.json({ date: '', nav: '' });
+    console.error('MFAPI NAV request failed:', err.message);
+    return res.status(502).json({ error: 'Unable to load mutual fund NAV data' });
+  }
+});
+
+app.get('/mf-history/:googleValue', async (req, res) => {
+  try {
+    const history = await getMfHistory(req.params.googleValue);
+    return res.json(history.data);
+  } catch (err) {
+    console.error('MFAPI history request failed:', err.message);
+    return res.status(502).json({ error: 'Unable to load mutual fund NAV history' });
   }
 });
 
@@ -852,23 +838,7 @@ app.get('/mf-nav/:userId/:fundName', async (req, res) => {
       });
     }
     
-    console.log(`📡 Fetching from mfapi.in with GoogleValue: ${googleValue}`);
-    
-    // Fetch NAV data from mfapi.in
-    const mfApiUrl = `https://api.mfapi.in/mf/${googleValue}`;
-    console.log(`   URL: ${mfApiUrl}`);
-    
-    const response = await fetch(mfApiUrl);
-    
-    if (!response.ok) {
-      console.log(`❌ API returned status: ${response.status}`);
-      return res.status(500).json({ 
-        error: `API error: ${response.status}`,
-        mfApiUrl 
-      });
-    }
-    
-    const data = await response.json();
+    const data = await getMfHistory(googleValue);
     
     if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
       console.log(`⚠️  No data array in API response`);
