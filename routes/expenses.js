@@ -147,7 +147,7 @@ router.get('/analysis', async (req, res, next) => {
           _id: '$expenseTypeId',
           total: { $sum: '$amount' },
           entryCount: { $sum: 1 },
-          entries: { $push: { date: '$date', amount: '$amount' } }
+          entries: { $push: { date: '$date', amount: '$amount', comments: '$comments' } }
         }
       },
       {

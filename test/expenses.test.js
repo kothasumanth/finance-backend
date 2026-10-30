@@ -295,12 +295,12 @@ test('returns not found when an expense is not owned by the signed-in account', 
   }
 });
 
-test('includes individual entries in category analysis', async () => {
+test('includes individual entry dates, amounts, and comments in category analysis', async () => {
   const originalAggregate = Expense.aggregate;
   let pipeline;
   const entries = [
-    { date: new Date('2026-10-20T00:00:00.000Z'), amount: 42.5 },
-    { date: new Date('2026-10-21T00:00:00.000Z'), amount: 15 }
+    { date: new Date('2026-10-20T00:00:00.000Z'), amount: 42.5, comments: 'Lunch with client' },
+    { date: new Date('2026-10-21T00:00:00.000Z'), amount: 15, comments: '' }
   ];
   Expense.aggregate = async stages => {
     pipeline = stages;
@@ -310,7 +310,9 @@ test('includes individual entries in category analysis', async () => {
   try {
     const { res } = await invoke('GET', '/analysis', { query: { year: '2026', month: '10' } });
     const groupStage = pipeline.find(stage => stage.$group);
-    assert.deepEqual(groupStage.$group.entries, { $push: { date: '$date', amount: '$amount' } });
+    assert.deepEqual(groupStage.$group.entries, {
+      $push: { date: '$date', amount: '$amount', comments: '$comments' }
+    });
     assert.deepEqual(res.body[0].entries, entries);
   } finally {
     Expense.aggregate = originalAggregate;
