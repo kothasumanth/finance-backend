@@ -10,10 +10,17 @@ function createMfApiCache({ fetchImpl = fetch, ttlMs = CACHE_TTL_MS, now = Date.
     if (!schemeCode) throw new Error('A mutual fund scheme code is required');
 
     const cached = cache.get(schemeCode);
-    if (cached && cached.expiresAt > now()) return cached.data;
+    if (cached && cached.expiresAt > now()) {
+      console.info(`[MFAPI cache] HIT scheme=${schemeCode}`);
+      return cached.data;
+    }
 
-    if (inFlight.has(schemeCode)) return inFlight.get(schemeCode);
+    if (inFlight.has(schemeCode)) {
+      console.info(`[MFAPI cache] WAIT scheme=${schemeCode}; request already in flight`);
+      return inFlight.get(schemeCode);
+    }
 
+    console.info(`[MFAPI cache] MISS scheme=${schemeCode}; requesting MFAPI`);
     const request = (async () => {
       const response = await fetchImpl(`https://api.mfapi.in/mf/${encodeURIComponent(schemeCode)}`);
       if (!response.ok) throw new Error(`MFAPI request failed (${response.status})`);
