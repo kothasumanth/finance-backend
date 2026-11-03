@@ -93,6 +93,44 @@ npm run restore
 - Links users with their mutual funds, PPF, PF, and other data properly
 - Zero data loss after restore
 
+### Copy Production Database to Local
+Use MongoDB Database Tools (`mongodump` and `mongorestore`) to copy a database from Atlas into a local MongoDB instance. Run the PowerShell commands below from this repository's `finance-backend` directory.
+
+Before starting:
+- Install MongoDB Database Tools and verify `mongodump --version` and `mongorestore --version` work in a new PowerShell terminal.
+- In Atlas, add your current IP under **Security → Network Access → IP Access List**.
+- Use a dedicated Atlas database user with read access to the source database. This is separate from your Atlas website login.
+- Find the exact source database name in Atlas Data Explorer. Keep the local `.env` pointed at `mongodb://localhost:27017/finance_copilot`; do not point the local app at production.
+- Keep production credentials and the dump archive private. Do not commit or share them.
+
+Set the source and local database names, then enter the URI copied from **Connect → Drivers**. Use the URI as Atlas provides it; the database name is supplied separately with `--db`.
+
+```powershell
+$sourceDb = "<exact database name shown in Atlas Data Explorer>"
+$localDb = "finance_copilot"
+$archive = Join-Path $env:TEMP "finance-prod.archive.gz"
+$env:PROD_URI = Read-Host "Paste Atlas Drivers URI"
+
+mongodump --uri="$env:PROD_URI" --db="$sourceDb" --archive="$archive" --gzip
+Remove-Item Env:\PROD_URI
+```
+
+Confirm the archive exists and has content, then preview its namespaces before restoring:
+
+```powershell
+Test-Path $archive
+Get-Item $archive | Select-Object FullName, Length
+mongorestore --archive="$archive" --gzip --dryRun --verbose
+```
+
+If the preview lists collections for the expected source database, restore them to the local database:
+
+```powershell
+mongorestore --uri="mongodb://localhost:27017" --archive="$archive" --gzip --nsFrom="$($sourceDb).*" --nsTo="$($localDb).*" --drop --verbose
+```
+
+**Warning**: `--drop` deletes matching collections in the destination before restoring. Verify that the destination URI is `localhost` and that the preview shows the expected source collections before running the restore. If the restore reports zero documents, check the source database name and archive preview; the source name must match `$sourceDb` exactly.
+
 ### Backup Safety
 - ✅ Backup files are in `.gitignore` - they won't be committed to GitHub
 - ✅ Contains personal/financial data - keep locally or encrypted
