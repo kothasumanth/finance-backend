@@ -1,3 +1,5 @@
+const findApplicablePFInterest = require('./pfInterestLookup');
+
 function parseSetupDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const date = new Date(`${value}T00:00:00.000Z`);
@@ -82,24 +84,30 @@ async function setupPFPeriods({ PFEntry, PFInterest, mongoose }, { userId, pfTyp
   }
 
   const periodsToAdd = [];
+  const interestRows = await PFInterest.find();
   let previousBalance = existingEntries.length
     ? Number(existingEntries[existingEntries.length - 1].balance) || 0
     : 0;
   let nextPeriod = existingEntries.length ? addMonths(lastPeriod, 1) : firstPeriod;
 
   while (nextPeriod <= targetEnd) {
-    const pfInterest = await PFInterest.findOne({
-      startDate: { $lte: nextPeriod },
-      endDate: { $gte: nextPeriod },
-      pfType: pfTypeId
-    });
+    const pfInterest = findApplicablePFInterest(interestRows, pfTypeId, nextPeriod);
+
+    if (!pfInterest) {
+      const error = new Error(
+        `No PF interest rate is configured for ${nextPeriod.toISOString().slice(0, 7)}. Add an interest period before extending PF periods.`
+      );
+      error.status = 400;
+      throw error;
+    }
+
     const amountDeposited = 0;
     periodsToAdd.push({
       userId,
       pfTypeId,
       date: nextPeriod,
       monthInterest: 0,
-      pfInterestId: pfInterest ? pfInterest._id : null,
+      pfInterestId: pfInterest._id,
       amountDeposited,
       lowestBalance: previousBalance,
       balance: previousBalance

@@ -5,7 +5,12 @@ const setupPFPeriods = require('../pfEntrySetup');
 const userId = '123456789012345678901234';
 const pfTypeId = 'abcdefabcdefabcdefabcdef';
 
-function createModels(initialEntries = []) {
+function createModels(initialEntries = [], interestRows = [{
+  _id: 'interest-id',
+  pfType: pfTypeId,
+  startDate: new Date('2000-01-01T00:00:00.000Z'),
+  endDate: new Date('2100-12-31T00:00:00.000Z')
+}]) {
   const entries = initialEntries.map(entry => ({ ...entry, date: new Date(entry.date) }));
   const PFEntry = {
     find: () => ({
@@ -25,7 +30,7 @@ function createModels(initialEntries = []) {
     }
   };
   const PFInterest = {
-    findOne: async () => ({ _id: 'interest-id' })
+    find: async () => interestRows
   };
   const mongoose = {
     Types: {
@@ -79,6 +84,63 @@ test('extends existing periods without changing their deposits or balances', asy
     '2025-03-01'
   ]);
   assert.ok(entries.slice(2).every(item => item.amountDeposited === 0 && item.balance === 1500));
+});
+
+test('matches interest periods stored as date strings when extending PF periods', async () => {
+  const { entries, models } = createModels(
+    [entry('2025-01-01', 100, 100)],
+    [{
+      _id: 'prior-interest-id',
+      pfType: pfTypeId,
+      startDate: '2024-04-01T00:00:00.000Z',
+      endDate: '2031-03-31T00:00:00.000Z'
+    }]
+  );
+  const result = await setupPFPeriods(models, {
+    userId,
+    pfTypeId,
+    endDate: '2025-03-31'
+  });
+
+  assert.equal(result.createdCount, 2);
+  assert.deepEqual(entries.slice(1).map(item => item.pfInterestId), [
+    'prior-interest-id',
+    'prior-interest-id'
+  ]);
+});
+
+test('matches restored PF interest rows whose type ID is stored as a string', async () => {
+  const { entries, models } = createModels(
+    [entry('2026-09-01', 100, 100)],
+    [{
+      _id: 'restored-interest-id',
+      pfType: String(pfTypeId),
+      startDate: '2026-04-01',
+      endDate: '2031-03-31'
+    }]
+  );
+  const result = await setupPFPeriods(models, {
+    userId,
+    pfTypeId,
+    endDate: '2026-12-31'
+  });
+
+  assert.equal(result.createdCount, 3);
+  assert.ok(entries.slice(1).every(item => item.pfInterestId === 'restored-interest-id'));
+});
+
+test('reports a clear error when no interest rate exists for a new period', async () => {
+  const { entries, models } = createModels([entry('2025-01-01')], []);
+
+  await assert.rejects(
+    setupPFPeriods(models, { userId, pfTypeId, endDate: '2025-02-28' }),
+    error => {
+      assert.equal(error.status, 400);
+      assert.match(error.message, /No PF interest rate is configured for 2025-02/);
+      return true;
+    }
+  );
+  assert.equal(entries.length, 1);
 });
 
 test('blocks reducing periods that still contain deposits', async () => {

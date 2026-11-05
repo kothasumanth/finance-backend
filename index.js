@@ -13,6 +13,7 @@ const PFInterest = require('./pfInterest');
 const PFType = require('./pfType');
 const PFEntry = require('./pfEntry');
 const setupPFPeriods = require('./pfEntrySetup');
+const findApplicablePFInterest = require('./pfInterestLookup');
 const mfCapTypesRouter = require('./mfCapTypes');
 const authRouter = require('./routes/auth');
 const expensesRouter = require('./routes/expenses');
@@ -464,11 +465,11 @@ app.put('/pfentry/:id', async (req, res) => {
     if (!entry) return res.status(404).json({ error: 'Entry not found' });
     // Update the entry with new values
     if (date) entry.date = date;
-  if (amountDeposited !== undefined) entry.amountDeposited = amountDeposited;
-  if (monthInterest !== undefined) entry.monthInterest = Number(Number(monthInterest).toFixed(2));
-    await entry.save();
+    if (amountDeposited !== undefined) entry.amountDeposited = amountDeposited;
+    if (monthInterest !== undefined) entry.monthInterest = Number(Number(monthInterest).toFixed(2));
     // Get all entries for this user and pfTypeId, sorted by date
     const allEntries = await PFEntry.find({ userId: entry.userId, pfTypeId: entry.pfTypeId }).sort({ date: 1 });
+    const interestRows = await PFInterest.find();
     // Find the index of the edited entry
     const idx = allEntries.findIndex(e => e._id.toString() === entry._id.toString());
     // Recalculate lowestBalance and balance from the edited entry onwards
@@ -518,27 +519,15 @@ app.put('/pfentry/:id', async (req, res) => {
         if (monthInterest !== undefined) e.monthInterest = Number(Number(monthInterest).toFixed(2));
       }
       // Recalculate monthInterest using lowestBalance and ROI
-      let roi = 0;
-      // Find PFInterest for this entry's date that matches its pfTypeId (ensures PF vs PPF selection)
-      try {
-        const pfInterestForDate = await PFInterest.findOne({
-          startDate: { $lte: d },
-          endDate: { $gte: d },
-          pfType: e.pfTypeId
-        });
-        if (pfInterestForDate && pfInterestForDate.rateOfInterest) {
-          roi = pfInterestForDate.rateOfInterest;
-          // ensure the entry references the correct PFInterest
-          e.pfInterestId = pfInterestForDate._id;
-        } else {
-          // if no matching PFInterest, clear the reference so we don't accidentally use wrong rates
-          e.pfInterestId = undefined;
-        }
-      } catch (err) {
-        // leave roi as 0 on error
+      const pfInterestForDate = findApplicablePFInterest(interestRows, e.pfTypeId, d);
+      if (!pfInterestForDate) {
+        const error = new Error(`No PF interest rate is configured for ${d.toISOString().slice(0, 7)}.`);
+        error.status = 400;
+        throw error;
       }
-  // Save monthInterest as float with 2 decimal places
-  e.monthInterest = Number(((lowestBalance * roi) / 1200).toFixed(2));
+      const roi = Number(pfInterestForDate.rateOfInterest) || 0;
+      e.pfInterestId = pfInterestForDate._id;
+      e.monthInterest = Number(((lowestBalance * roi) / 1200).toFixed(2));
       await e.save();
       prevBalance = balance;
     }
@@ -546,7 +535,7 @@ app.put('/pfentry/:id', async (req, res) => {
     const updatedEntries = await PFEntry.find({ userId: entry.userId, pfTypeId: entry.pfTypeId });
     res.json({ success: true, updatedEntries });
   } catch (err) {
-    res.status(500).json({ error: 'Error updating pfentry: ' + err.message });
+    res.status(err.status || 500).json({ error: 'Error updating pfentry: ' + err.message });
   }
 });
 
@@ -565,6 +554,7 @@ app.post('/pfentry/recalculate-all', async (req, res) => {
     }
     const users = await User.find();
     let totalUpdated = 0;
+    const interestRows = await PFInterest.find();
     for (const pfType of pfTypes) {
       for (const user of users) {
         const allEntries = await PFEntry.find({ userId: user._id, pfTypeId: pfType._id }).sort({ date: 1 });
@@ -575,52 +565,13 @@ app.post('/pfentry/recalculate-all', async (req, res) => {
           const d = new Date(e.date);
           const day = d.getUTCDate();
           const amt = e.amountDeposited;
-          // Find correct PFInterest for this entry's date
-          // Find PFInterest matching date and pfType for this entry
-          // Try to find a PFInterest that covers this date for the pfType.
-          // Use a robust lookup with fallbacks in case of timezone/precision issues or slightly mismatched ranges.
-          let pfInterest = await PFInterest.findOne({
-            startDate: { $lte: d },
-            endDate: { $gte: d },
-            pfType: pfType._id
-          });
-
-          if (!pfInterest) {
-            // Fallback: fetch all PFInterest rows for this pfType and match by normalized date (UTC midnight)
-            const candidates = await PFInterest.find({ pfType: pfType._id }).sort({ startDate: -1 });
-            const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-            for (const cand of candidates) {
-              try {
-                const s = new Date(cand.startDate);
-                const e = new Date(cand.endDate);
-                const sNorm = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate()));
-                const eNorm = new Date(Date.UTC(e.getUTCFullYear(), e.getUTCMonth(), e.getUTCDate()));
-                if (target >= sNorm && target <= eNorm) {
-                  pfInterest = cand;
-                  break;
-                }
-              } catch (err) {
-                // ignore parse errors and continue
-              }
-            }
-          }
-
-          if (!pfInterest) {
-            // As an extra fallback, try to pick the most recent PFInterest whose startDate is <= target date
-            const fallback = await PFInterest.findOne({ pfType: pfType._id, startDate: { $lte: d } }).sort({ startDate: -1 });
-            if (fallback) pfInterest = fallback;
-          }
+          const pfInterest = findApplicablePFInterest(interestRows, pfType._id, d);
 
           if (!pfInterest) {
             throw new Error(`No PFInterest found for entry date ${d.toISOString().slice(0,10)} (user: ${user._id}, pfType: ${pfType._id})`);
           }
-          let roi = 0;
-          if (pfInterest && pfInterest.rateOfInterest) {
-            roi = pfInterest.rateOfInterest;
-            e.pfInterestId = pfInterest._id;
-          } else {
-            e.pfInterestId = undefined;
-          }
+          const roi = Number(pfInterest.rateOfInterest) || 0;
+          e.pfInterestId = pfInterest._id;
           let lowestBalance = 0;
           if (i === 0) {
             lowestBalance = 0;

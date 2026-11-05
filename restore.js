@@ -43,6 +43,7 @@ async function restore() {
           convertId('userId');
           convertId('fundName');
           convertId('pfTypeId');
+          convertId('pfType');
           convertId('pfInterestId');
           convertId('mfMetadataId');
           
