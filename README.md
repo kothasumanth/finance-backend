@@ -53,6 +53,12 @@ Expense types and expense entries are scoped to the signed-in account. Expense e
 
 The authenticated `/expenses` API supports listing, adding, editing, and deleting expense types (only when no entries use the type), saving up to 100 entries in one request, editing and deleting owned entries, a month-by-month total overview, daily entry listings by month, and year/month category analysis. Comments are limited to 500 characters. Renaming an expense type also changes the name shown for its existing entries.
 
+## Mutual Fund NAV Alerts
+
+The authenticated `/mf-nav-alerts` API checks the signed-in user's mutual funds with a positive remaining investment balance. The lookback is fixed at 60 calendar days in the backend.
+
+A notification is created when the newest NAV exactly matches a NAV from an earlier date within the previous 60 days. One database record is kept per user and fund. When a newer NAV date is checked, a match replaces the prior notification (even if the NAV value is the same); no match expires the previous notification by dismissing it. Manually removing a notification also hides it without deleting its record. NAV history is cached for up to 24 hours, and checks run when the signed-in user opens or refreshes the notification panel. This is informational only and is not investment advice.
+
 ## Roles and User Administration
 
 The `roles` collection stores the `Admin` and `Member` roles; each user references a role document. On backend startup, role documents are created if needed, legacy user roles are migrated, `Sumanth` is assigned Admin, and other unassigned users are assigned Member. New registrations default to Member. The migration runs only for users without a role assignment, so later admin role changes are preserved.

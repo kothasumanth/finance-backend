@@ -34,6 +34,24 @@ test('caches NAV history per scheme until the TTL expires', async () => {
   assert.equal(calls, 2);
 });
 
+test('refreshes cached NAV history when a shorter max age is requested', async () => {
+  let time = 0;
+  let calls = 0;
+  const cache = createMfApiCache({
+    ttlMs: 1000,
+    now: () => time,
+    fetchImpl: async () => {
+      calls += 1;
+      return response({ data: [{ nav: String(calls) }] });
+    }
+  });
+
+  assert.equal((await cache.getHistory('123')).data[0].nav, '1');
+  time = 60;
+  assert.equal((await cache.getHistory('123', { maxAgeMs: 50 })).data[0].nav, '2');
+  assert.equal(calls, 2);
+});
+
 test('coalesces concurrent requests for the same scheme', async () => {
   let calls = 0;
   let resolveFetch;

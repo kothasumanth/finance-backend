@@ -17,6 +17,7 @@ const findApplicablePFInterest = require('./pfInterestLookup');
 const mfCapTypesRouter = require('./mfCapTypes');
 const authRouter = require('./routes/auth');
 const expensesRouter = require('./routes/expenses');
+const mfNavAlertsRouter = require('./routes/mfNavAlerts');
 const adminRouter = require('./routes/admin');
 const { ensureRoleData } = require('./roleSetup');
 const { requireAdminForSharedWrites, requireAuth, requirePasswordChanged, requireSameOrigin } = require('./auth');
@@ -48,6 +49,7 @@ app.use('/admin', adminRouter);
 app.use('/gold-entries', goldEntryRouter);
 app.use('/gold-price', goldPriceRouter);
 app.use('/expenses', expensesRouter);
+app.use('/mf-nav-alerts', mfNavAlertsRouter);
 app.use('/', mfCapTypesRouter);
 app.use('/expected-percentages', require('./routes/expectedPercentages'));
 app.use('/', require('./sipInfo')); // Add SIP Info routes
