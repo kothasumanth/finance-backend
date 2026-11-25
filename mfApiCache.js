@@ -5,12 +5,12 @@ function createMfApiCache({ fetchImpl = fetch, ttlMs = CACHE_TTL_MS, now = Date.
   const cache = new Map();
   const inFlight = new Map();
 
-  async function getHistory(googleValue) {
+  async function getHistory(googleValue, { maxAgeMs = ttlMs } = {}) {
     const schemeCode = String(googleValue || '').trim();
     if (!schemeCode) throw new Error('A mutual fund scheme code is required');
 
     const cached = cache.get(schemeCode);
-    if (cached && cached.expiresAt > now()) {
+    if (cached && cached.expiresAt > now() && now() - cached.fetchedAt < maxAgeMs) {
       console.info(`[MFAPI cache] HIT scheme=${schemeCode}`);
       return cached.data;
     }
@@ -31,7 +31,8 @@ function createMfApiCache({ fetchImpl = fetch, ttlMs = CACHE_TTL_MS, now = Date.
       }
 
       cache.delete(schemeCode);
-      cache.set(schemeCode, { data: payload, expiresAt: now() + ttlMs });
+      const fetchedAt = now();
+      cache.set(schemeCode, { data: payload, fetchedAt, expiresAt: fetchedAt + ttlMs });
       if (cache.size > MAX_CACHE_ENTRIES) {
         cache.delete(cache.keys().next().value);
       }

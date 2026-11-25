@@ -12,9 +12,12 @@ const MutualFundMetadata = require('./models/mutualFundMetadata');
 const PFInterest = require('./pfInterest');
 const PFType = require('./pfType');
 const PFEntry = require('./pfEntry');
+const setupPFPeriods = require('./pfEntrySetup');
+const findApplicablePFInterest = require('./pfInterestLookup');
 const mfCapTypesRouter = require('./mfCapTypes');
 const authRouter = require('./routes/auth');
 const expensesRouter = require('./routes/expenses');
+const mfNavAlertsRouter = require('./routes/mfNavAlerts');
 const adminRouter = require('./routes/admin');
 const { ensureRoleData } = require('./roleSetup');
 const { requireAdminForSharedWrites, requireAuth, requirePasswordChanged, requireSameOrigin } = require('./auth');
@@ -46,6 +49,7 @@ app.use('/admin', adminRouter);
 app.use('/gold-entries', goldEntryRouter);
 app.use('/gold-price', goldPriceRouter);
 app.use('/expenses', expensesRouter);
+app.use('/mf-nav-alerts', mfNavAlertsRouter);
 app.use('/', mfCapTypesRouter);
 app.use('/expected-percentages', require('./routes/expectedPercentages'));
 app.use('/', require('./sipInfo')); // Add SIP Info routes
@@ -400,167 +404,19 @@ app.post('/pf-types/seed', async (req, res) => {
   }
 });
 
-// Bulk create PPF entries for a user for 15 years from a start date
-app.post('/pfentry/ppf-bulk-create', async (req, res) => {
+async function handlePFPeriodSetup(req, res, label) {
   try {
-    const { userId, pfTypeId, startDate } = req.body;
-    // Check if pfentries collection exists
-    const collections = await mongoose.connection.db.listCollections({ name: 'pfentries' }).toArray();
-    if (collections.length === 0) {
-      // Create collection by inserting a dummy and deleting it
-      const dummy = await PFEntry.create({
-        userId,
-        pfTypeId,
-        date: new Date(),
-        pfInterestId: (await PFInterest.findOne())?._id || new mongoose.Types.ObjectId(),
-        monthInterest: 0
-      });
-      await PFEntry.deleteOne({ _id: dummy._id });
-    }
-    // Now check for existing entries (force count, not findOne)
-    const count = await PFEntry.countDocuments({ userId, pfTypeId });
-    if (count > 0) return res.status(400).json({ error: 'PPF entries already exist for this user.' });
-    // --- Robust month increment logic ---
-    let start = new Date(startDate);
-    // Always use the 1st of the month for the start date
-    start = new Date(start.getFullYear(), start.getMonth(), 1);
-    // If start month is before April, adjust to April 1 of that year
-    if (start.getMonth() < 3) {
-      start = new Date(start.getFullYear(), 3, 1);
-    }
-    const startYear = start.getFullYear();
-    const startMonth = start.getMonth();
-    const entries = [];
-    let prevBalance = 0;
-    for (let i = 0; i < 180; i++) { // 15 years * 12 months
-      const year = startYear + Math.floor((startMonth + i) / 12);
-      const month = (startMonth + i) % 12;
-      const entryDate = new Date(Date.UTC(year, month, 1)); // always 1st of month, UTC
-      // Prefer PFInterest rows that match the provided pfTypeId (ensures PF vs PPF rates)
-      const pfInterest = await PFInterest.findOne({
-        startDate: { $lte: entryDate },
-        endDate: { $gte: entryDate },
-        pfType: pfTypeId
-      });
-      // Calculate lowestBalance
-      let amountDeposited = 0; // default for bulk create
-      let day = 1; // always 1st for bulk create
-      let lowestBalance = 0;
-      if (i === 0) {
-        lowestBalance = 0; // first record
-      } else {
-        if (day > 5) {
-          lowestBalance = prevBalance;
-        } else {
-          lowestBalance = prevBalance + amountDeposited;
-        }
-      }
-      // Calculate balance
-      let balance = 0;
-      if (day > 5) {
-        balance = lowestBalance + amountDeposited;
-      } else {
-        balance = lowestBalance;
-      }
-      entries.push({
-        userId,
-        pfTypeId,
-        date: entryDate,
-        monthInterest: 0,
-        pfInterestId: pfInterest ? pfInterest._id : null,
-        amountDeposited,
-        lowestBalance,
-        balance
-      });
-      prevBalance = balance;
-    }
-    const result = await PFEntry.insertMany(entries);
-    res.json({ success: true, count: result.length });
+    res.json(await setupPFPeriods({ PFEntry, PFInterest, mongoose }, req.body));
   } catch (err) {
-    res.status(500).json({ error: 'Error bulk creating PPF entries: ' + err.message });
+    res.status(err.status || 500).json({
+      error: err.status ? err.message : `Error updating ${label} periods: ${err.message}`,
+      ...(err.periods ? { periods: err.periods } : {})
+    });
   }
-});
+}
 
-// Bulk create PF entries for a user for 15 years from a start date (generic for any PF type)
-app.post('/pfentry/pf-bulk-create', async (req, res) => {
-  try {
-    const { userId, pfTypeId, startDate } = req.body;
-    // Check if pfentries collection exists
-    const collections = await mongoose.connection.db.listCollections({ name: 'pfentries' }).toArray();
-    if (collections.length === 0) {
-      // Create collection by inserting a dummy and deleting it
-      const dummy = await PFEntry.create({
-        userId,
-        pfTypeId,
-        date: new Date(),
-        pfInterestId: (await PFInterest.findOne())?._id || new mongoose.Types.ObjectId(),
-        monthInterest: 0
-      });
-      await PFEntry.deleteOne({ _id: dummy._id });
-    }
-    // Now check for existing entries (force count, not findOne)
-    const count = await PFEntry.countDocuments({ userId, pfTypeId });
-    if (count > 0) return res.status(400).json({ error: 'PF entries already exist for this user and type.' });
-    // --- Robust month increment logic ---
-    let start = new Date(startDate);
-    // Always use the 1st of the month for the start date
-    start = new Date(start.getFullYear(), start.getMonth(), 1);
-    // If start month is before April, adjust to April 1 of that year
-    if (start.getMonth() < 3) {
-      start = new Date(start.getFullYear(), 3, 1);
-    }
-    const startYear = start.getFullYear();
-    const startMonth = start.getMonth();
-    const entries = [];
-    let prevBalance = 0;
-    for (let i = 0; i < 180; i++) { // 15 years * 12 months
-      const year = startYear + Math.floor((startMonth + i) / 12);
-      const month = (startMonth + i) % 12;
-      const entryDate = new Date(Date.UTC(year, month, 1)); // always 1st of month, UTC
-      // Prefer PFInterest rows that match the provided pfTypeId (ensures PF vs PPF rates)
-      const pfInterest = await PFInterest.findOne({
-        startDate: { $lte: entryDate },
-        endDate: { $gte: entryDate },
-        pfType: pfTypeId
-      });
-      // Calculate lowestBalance
-      let amountDeposited = 0; // default for bulk create
-      let day = 1; // always 1st for bulk create
-      let lowestBalance = 0;
-      if (i === 0) {
-        lowestBalance = 0; // first record
-      } else {
-        if (day > 5) {
-          lowestBalance = prevBalance;
-        } else {
-          lowestBalance = prevBalance + amountDeposited;
-        }
-      }
-      // Calculate balance
-      let balance = 0;
-      if (day > 5) {
-        balance = lowestBalance + amountDeposited;
-      } else {
-        balance = lowestBalance;
-      }
-      entries.push({
-        userId,
-        pfTypeId,
-        date: entryDate,
-        monthInterest: 0,
-        pfInterestId: pfInterest ? pfInterest._id : null,
-        amountDeposited,
-        lowestBalance,
-        balance
-      });
-      prevBalance = balance;
-    }
-    const result = await PFEntry.insertMany(entries);
-    res.json({ success: true, count: result.length });
-  } catch (err) {
-    res.status(500).json({ error: 'Error bulk creating PF entries: ' + err.message });
-  }
-});
+app.post('/pfentry/ppf-bulk-create', (req, res) => handlePFPeriodSetup(req, res, 'PPF'));
+app.post('/pfentry/pf-bulk-create', (req, res) => handlePFPeriodSetup(req, res, 'PF'));
 
 // Get pfentries for user and pfTypeId
 app.get('/pfentry/user/:userId/type/:pfTypeId', async (req, res) => {
@@ -611,11 +467,11 @@ app.put('/pfentry/:id', async (req, res) => {
     if (!entry) return res.status(404).json({ error: 'Entry not found' });
     // Update the entry with new values
     if (date) entry.date = date;
-  if (amountDeposited !== undefined) entry.amountDeposited = amountDeposited;
-  if (monthInterest !== undefined) entry.monthInterest = Number(Number(monthInterest).toFixed(2));
-    await entry.save();
+    if (amountDeposited !== undefined) entry.amountDeposited = amountDeposited;
+    if (monthInterest !== undefined) entry.monthInterest = Number(Number(monthInterest).toFixed(2));
     // Get all entries for this user and pfTypeId, sorted by date
     const allEntries = await PFEntry.find({ userId: entry.userId, pfTypeId: entry.pfTypeId }).sort({ date: 1 });
+    const interestRows = await PFInterest.find();
     // Find the index of the edited entry
     const idx = allEntries.findIndex(e => e._id.toString() === entry._id.toString());
     // Recalculate lowestBalance and balance from the edited entry onwards
@@ -665,27 +521,15 @@ app.put('/pfentry/:id', async (req, res) => {
         if (monthInterest !== undefined) e.monthInterest = Number(Number(monthInterest).toFixed(2));
       }
       // Recalculate monthInterest using lowestBalance and ROI
-      let roi = 0;
-      // Find PFInterest for this entry's date that matches its pfTypeId (ensures PF vs PPF selection)
-      try {
-        const pfInterestForDate = await PFInterest.findOne({
-          startDate: { $lte: d },
-          endDate: { $gte: d },
-          pfType: e.pfTypeId
-        });
-        if (pfInterestForDate && pfInterestForDate.rateOfInterest) {
-          roi = pfInterestForDate.rateOfInterest;
-          // ensure the entry references the correct PFInterest
-          e.pfInterestId = pfInterestForDate._id;
-        } else {
-          // if no matching PFInterest, clear the reference so we don't accidentally use wrong rates
-          e.pfInterestId = undefined;
-        }
-      } catch (err) {
-        // leave roi as 0 on error
+      const pfInterestForDate = findApplicablePFInterest(interestRows, e.pfTypeId, d);
+      if (!pfInterestForDate) {
+        const error = new Error(`No PF interest rate is configured for ${d.toISOString().slice(0, 7)}.`);
+        error.status = 400;
+        throw error;
       }
-  // Save monthInterest as float with 2 decimal places
-  e.monthInterest = Number(((lowestBalance * roi) / 1200).toFixed(2));
+      const roi = Number(pfInterestForDate.rateOfInterest) || 0;
+      e.pfInterestId = pfInterestForDate._id;
+      e.monthInterest = Number(((lowestBalance * roi) / 1200).toFixed(2));
       await e.save();
       prevBalance = balance;
     }
@@ -693,7 +537,7 @@ app.put('/pfentry/:id', async (req, res) => {
     const updatedEntries = await PFEntry.find({ userId: entry.userId, pfTypeId: entry.pfTypeId });
     res.json({ success: true, updatedEntries });
   } catch (err) {
-    res.status(500).json({ error: 'Error updating pfentry: ' + err.message });
+    res.status(err.status || 500).json({ error: 'Error updating pfentry: ' + err.message });
   }
 });
 
@@ -712,6 +556,7 @@ app.post('/pfentry/recalculate-all', async (req, res) => {
     }
     const users = await User.find();
     let totalUpdated = 0;
+    const interestRows = await PFInterest.find();
     for (const pfType of pfTypes) {
       for (const user of users) {
         const allEntries = await PFEntry.find({ userId: user._id, pfTypeId: pfType._id }).sort({ date: 1 });
@@ -722,52 +567,13 @@ app.post('/pfentry/recalculate-all', async (req, res) => {
           const d = new Date(e.date);
           const day = d.getUTCDate();
           const amt = e.amountDeposited;
-          // Find correct PFInterest for this entry's date
-          // Find PFInterest matching date and pfType for this entry
-          // Try to find a PFInterest that covers this date for the pfType.
-          // Use a robust lookup with fallbacks in case of timezone/precision issues or slightly mismatched ranges.
-          let pfInterest = await PFInterest.findOne({
-            startDate: { $lte: d },
-            endDate: { $gte: d },
-            pfType: pfType._id
-          });
-
-          if (!pfInterest) {
-            // Fallback: fetch all PFInterest rows for this pfType and match by normalized date (UTC midnight)
-            const candidates = await PFInterest.find({ pfType: pfType._id }).sort({ startDate: -1 });
-            const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-            for (const cand of candidates) {
-              try {
-                const s = new Date(cand.startDate);
-                const e = new Date(cand.endDate);
-                const sNorm = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate()));
-                const eNorm = new Date(Date.UTC(e.getUTCFullYear(), e.getUTCMonth(), e.getUTCDate()));
-                if (target >= sNorm && target <= eNorm) {
-                  pfInterest = cand;
-                  break;
-                }
-              } catch (err) {
-                // ignore parse errors and continue
-              }
-            }
-          }
-
-          if (!pfInterest) {
-            // As an extra fallback, try to pick the most recent PFInterest whose startDate is <= target date
-            const fallback = await PFInterest.findOne({ pfType: pfType._id, startDate: { $lte: d } }).sort({ startDate: -1 });
-            if (fallback) pfInterest = fallback;
-          }
+          const pfInterest = findApplicablePFInterest(interestRows, pfType._id, d);
 
           if (!pfInterest) {
             throw new Error(`No PFInterest found for entry date ${d.toISOString().slice(0,10)} (user: ${user._id}, pfType: ${pfType._id})`);
           }
-          let roi = 0;
-          if (pfInterest && pfInterest.rateOfInterest) {
-            roi = pfInterest.rateOfInterest;
-            e.pfInterestId = pfInterest._id;
-          } else {
-            e.pfInterestId = undefined;
-          }
+          const roi = Number(pfInterest.rateOfInterest) || 0;
+          e.pfInterestId = pfInterest._id;
           let lowestBalance = 0;
           if (i === 0) {
             lowestBalance = 0;

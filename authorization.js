@@ -2,11 +2,13 @@ const GoldEntry = require('./models/goldEntry');
 const MutualFundEntry = require('./models/mutualFundEntry');
 const PFEntry = require('./pfEntry');
 const SIPInfo = require('./models/sipInfo');
+const MfNavAlert = require('./models/mfNavAlert');
 
 const ownedRecordRoutes = [
   { pattern: /^\/mutual-funds\/([^/]+)$/, methods: new Set(['PUT', 'DELETE']), model: MutualFundEntry },
   { pattern: /^\/gold-entries\/([^/]+)$/, methods: new Set(['DELETE']), model: GoldEntry },
   { pattern: /^\/sip-info\/([^/]+)$/, methods: new Set(['PUT', 'DELETE']), model: SIPInfo },
+  { pattern: /^\/mf-nav-alerts\/([^/]+)$/, methods: new Set(['PUT']), model: MfNavAlert },
   { pattern: /^\/pfentry\/([^/]+)$/, methods: new Set(['PUT']), model: PFEntry }
 ];
 

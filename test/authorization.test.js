@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const GoldEntry = require('../models/goldEntry');
 const MutualFundEntry = require('../models/mutualFundEntry');
+const MfNavAlert = require('../models/mfNavAlert');
 const { authorizeOwnedData } = require('../authorization');
 const { requireAdminForSharedWrites, requireSameOrigin } = require('../auth');
 
@@ -85,6 +86,24 @@ test('does not allow updates by another user’s record ID', async () => {
     assert.equal(response.statusCode, 404);
   } finally {
     MutualFundEntry.findOne = originalFindOne;
+  }
+});
+
+test('does not allow updating another user’s NAV alert', async () => {
+  const originalFindOne = MfNavAlert.findOne;
+  MfNavAlert.findOne = async filter => {
+    assert.deepEqual(filter, { _id: 'foreign-alert', userId: 'user-one' });
+    return null;
+  };
+  try {
+    const { response, next } = await invoke(authorizeOwnedData, request({
+      method: 'PUT',
+      path: '/mf-nav-alerts/foreign-alert'
+    }));
+    assert.equal(next, false);
+    assert.equal(response.statusCode, 404);
+  } finally {
+    MfNavAlert.findOne = originalFindOne;
   }
 });
 
